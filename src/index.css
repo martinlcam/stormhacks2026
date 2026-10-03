@@ -1,0 +1,17 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-purple: #c252e1;
+  --color-cyan: #6ecbf5;
+  --color-night: #120a1c;
+  --color-bone: #e8e2f0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: #120a1c;
+}
