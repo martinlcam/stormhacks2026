@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { apparentMotion, bendMaterial, curvatureAt, setBend } from './bend'
 import type { Portal } from './Portal'
 
 /** A plane that keeps everything, so the clipping-plane count never changes
@@ -26,6 +27,12 @@ const NO_CLIP = new THREE.Plane(new THREE.Vector3(0, 1, 0), 1e6)
  *
  * Each virtual view is clipped at the destination portal's plane so the wall
  * behind the exit never blocks the view.
+ *
+ * Curvature: every pass is drawn bent around a centre (see bend.ts). The
+ * player's own view is centred on the player. A view through a portal is
+ * centred on the far door, so the far side is undistorted where it meets the
+ * doorway, and the virtual camera is moved by the inverse of the bend's
+ * motion at the near door, so the two sides line up.
  */
 export class PortalRenderer {
   /** Portals seen through portals seen through portals… */
@@ -59,6 +66,11 @@ export class PortalRenderer {
   private readonly frustum = new THREE.Frustum()
   private readonly viewProjection = new THREE.Matrix4()
   private readonly eye = new THREE.Vector3()
+  private readonly point = new THREE.Vector3()
+  private readonly sphere = new THREE.Sphere()
+  private readonly scratch = new THREE.Matrix4()
+  /** Per recursion level, per portal: how bending moves that doorway. */
+  private readonly motions: THREE.Matrix4[][] = []
   private readonly worldMaterials = new Set<THREE.Material>()
   private portals: readonly Portal[] = []
 
@@ -66,6 +78,9 @@ export class PortalRenderer {
     renderer.autoClear = false
     renderer.clippingPlanes = [this.clipPlane]
     this.limitMaterial.color.copy(this.depthLimitColor)
+    for (const material of [this.maskMaterial, this.sealMaterial, this.limitMaterial]) {
+      bendMaterial(material)
+    }
   }
 
   setPortals(portals: readonly Portal[]) {
@@ -77,11 +92,12 @@ export class PortalRenderer {
     }
   }
 
-  render(scene: THREE.Scene, camera: THREE.PerspectiveCamera) {
+  /** `centre` is the point the world is bent around: the player's feet. */
+  render(scene: THREE.Scene, camera: THREE.PerspectiveCamera, centre: THREE.Vector3) {
     this.passes = 0
     this.collectMaterials(scene)
     this.renderer.clear(true, true, true)
-    this.renderLevel(scene, camera, 0, null)
+    this.renderLevel(scene, camera, 0, null, centre, curvatureAt(centre))
   }
 
   private renderLevel(
@@ -89,14 +105,18 @@ export class PortalRenderer {
     camera: THREE.PerspectiveCamera,
     level: number,
     exit: Portal | null,
+    centre: THREE.Vector3,
+    k: number,
   ) {
     const clip = exit ? exit.plane : NO_CLIP
-    const visible = this.findVisible(camera, level, exit)
+    const visible = this.findVisible(camera, level, exit, centre, k)
+    const motions = this.motions[level]
 
     if (level < this.maxDepth) {
       for (const portal of visible) {
         // 1. mark
         this.clipPlane.copy(clip)
+        setBend(centre, k)
         this.maskMaterial.stencilRef = level
         this.maskMaterial.stencilFunc = THREE.EqualStencilFunc
         this.maskMaterial.stencilZPass = THREE.IncrementStencilOp
@@ -104,13 +124,16 @@ export class PortalRenderer {
 
         // 2. inside
         const virtual = this.cameraFor(level, camera)
-        virtual.matrixWorld.multiplyMatrices(portal.transform, camera.matrixWorld)
+        const unbend = this.scratch.copy(motions[this.portals.indexOf(portal)]).invert()
+        virtual.matrixWorld.multiplyMatrices(portal.transform, unbend).multiply(camera.matrixWorld)
         virtual.matrixWorld.decompose(virtual.position, virtual.quaternion, virtual.scale)
         virtual.updateMatrixWorld(true)
-        this.renderLevel(scene, virtual, level + 1, portal.target)
+        const far = portal.target.mesh.position
+        this.renderLevel(scene, virtual, level + 1, portal.target, far, curvatureAt(far))
 
         // 3. unmark
         this.clipPlane.copy(clip)
+        setBend(centre, k)
         this.maskMaterial.stencilRef = level + 1
         this.maskMaterial.stencilZPass = THREE.DecrementStencilOp
         this.drawPortals([portal], this.maskMaterial, camera)
@@ -119,6 +142,7 @@ export class PortalRenderer {
 
     // 4. seal
     this.clipPlane.copy(clip)
+    setBend(centre, k)
     this.renderer.state.buffers.depth.setMask(true)
     this.renderer.clearDepth()
     if (level < this.maxDepth) {
@@ -148,20 +172,40 @@ export class PortalRenderer {
 
   /** Portals this camera faces and has in view, farthest first so nearer
    *  portals paint over farther ones where they overlap on screen. */
-  private findVisible(camera: THREE.PerspectiveCamera, level: number, exit: Portal | null) {
+  private findVisible(
+    camera: THREE.PerspectiveCamera,
+    level: number,
+    exit: Portal | null,
+    centre: THREE.Vector3,
+    k: number,
+  ) {
     const list = (this.visibleLists[level] ??= [])
     list.length = 0
+    const motions = (this.motions[level] ??= [])
     this.viewProjection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)
     this.frustum.setFromProjectionMatrix(this.viewProjection)
     const eye = this.eye.setFromMatrixPosition(camera.matrixWorld)
-    for (const portal of this.portals) {
+    const distance = new Map<Portal, number>()
+    for (let i = 0; i < this.portals.length; i++) {
+      const portal = this.portals[i]
+      // Test against the doorway where bending puts it, not where it is stored.
+      const motion = apparentMotion(
+        portal.mesh.position,
+        centre,
+        k,
+        (motions[i] ??= new THREE.Matrix4()),
+      )
       if (portal === exit) continue
-      if (portal.plane.distanceToPoint(eye) <= 0) continue
-      if (!this.frustum.intersectsBox(portal.worldBounds)) continue
+      this.scratch.copy(motion).invert()
+      if (portal.plane.distanceToPoint(this.point.copy(eye).applyMatrix4(this.scratch)) <= 0)
+        continue
+      this.sphere.center.copy(portal.center).applyMatrix4(motion)
+      this.sphere.radius = portal.radius
+      if (!this.frustum.intersectsSphere(this.sphere)) continue
+      distance.set(portal, this.sphere.center.distanceToSquared(eye))
       list.push(portal)
     }
-    const at = eye.clone()
-    list.sort((a, b) => b.center.distanceToSquared(at) - a.center.distanceToSquared(at))
+    list.sort((a, b) => distance.get(b)! - distance.get(a)!)
     return list
   }
 
@@ -181,6 +225,7 @@ export class PortalRenderer {
       if (!material) return
       for (const m of Array.isArray(material) ? material : [material]) {
         if (!this.worldMaterials.has(m)) {
+          bendMaterial(m)
           m.stencilWrite = true
           m.stencilFunc = THREE.EqualStencilFunc
           this.worldMaterials.add(m)

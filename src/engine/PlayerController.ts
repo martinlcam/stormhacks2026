@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { wrapToPlaza } from './bend'
 import type { Portal } from './Portal'
 import { yawDelta } from './portalMath'
 
@@ -129,6 +130,7 @@ export class PlayerController {
     const doorway = portals.find((portal) => this.fits(portal) && portal.inDoorway(before))
     this.collide(colliders, doorway)
     this.traverse(portals)
+    wrapToPlaza(this.position)
   }
 
   private collide(colliders: readonly THREE.Box3[], doorway: Portal | undefined) {

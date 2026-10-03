@@ -3,6 +3,9 @@ import { Portal } from '../engine/Portal'
 
 type Vec3 = readonly [number, number, number]
 
+/** Longest box edge, in metres, drawn without extra vertices. */
+const SEGMENT = 2
+
 export interface BoxOptions {
   size: Vec3
   /** Centre of the box. */
@@ -44,15 +47,31 @@ export class World {
   readonly scene = new THREE.Scene()
   readonly colliders: THREE.Box3[] = []
   readonly portals: Portal[] = []
+  /**
+   * Side of the square plaza around the origin that is drawn as a planet, or
+   * null for a flat world. Walking off one edge enters at the opposite edge.
+   */
+  planetSize: number | null = null
   private readonly updaters: Updater[] = []
   private readonly triggers: { box: THREE.Box3; inside: boolean; onEnter: () => void }[] = []
 
   addBox({ size, position, material, collide = true }: BoxOptions): THREE.Mesh {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(...size), material)
+    // Bending moves vertices, so long faces need enough of them to curve.
+    // Vertical edges stay straight when bent and need no extra vertices.
+    const segments = (length: number) => Math.max(1, Math.ceil(length / SEGMENT))
+    const geometry = new THREE.BoxGeometry(...size, segments(size[0]), 1, segments(size[2]))
+    const mesh = new THREE.Mesh(geometry, material)
     mesh.position.set(...position)
+    // The stored bounds are not where a bent mesh is drawn.
+    mesh.frustumCulled = false
     this.scene.add(mesh)
     if (collide) this.colliders.push(new THREE.Box3().setFromObject(mesh))
     return mesh
+  }
+
+  /** Something solid with nothing to draw. */
+  addCollider(min: Vec3, max: Vec3) {
+    this.colliders.push(new THREE.Box3(new THREE.Vector3(...min), new THREE.Vector3(...max)))
   }
 
   /**

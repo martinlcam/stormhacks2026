@@ -39,6 +39,8 @@ export class Portal {
   readonly plane = new THREE.Plane()
   readonly worldBounds = new THREE.Box3()
   readonly center = new THREE.Vector3()
+  /** Radius of a sphere around `center` that contains the whole opening. */
+  readonly radius: number
   /** Carries the world through this portal to its target's side. */
   readonly transform = new THREE.Matrix4()
   readonly worldInverse = new THREE.Matrix4()
@@ -57,6 +59,7 @@ export class Portal {
     this.width = options.width
     this.height = options.height
     this.scale = options.scale ?? 1
+    this.radius = (Math.hypot(options.width, options.height) / 2 + PORTAL_THICKNESS) * this.scale
 
     const geometry = new THREE.BoxGeometry(options.width, options.height, PORTAL_THICKNESS)
     geometry.translate(0, options.height / 2, -PORTAL_THICKNESS / 2)

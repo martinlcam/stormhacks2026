@@ -2,7 +2,12 @@ import * as THREE from 'three'
 import type { Structure } from '../World'
 import { createSky, glow, gridTexture, matte, palette } from '../materials'
 
-const SIZE = 120
+/**
+ * Side of the plaza. It is drawn as a planet whose circumference is this
+ * length, so the radius is SIZE / 2π, about 38 m.
+ */
+const SIZE = 240
+const TILE = 20
 
 /** The open plaza every other structure stands on. */
 export const hub: Structure = {
@@ -15,14 +20,27 @@ export const hub: Structure = {
     sun.position.set(30, 60, 20)
     world.scene.add(sun)
 
-    world.addBox({
-      size: [SIZE, 1, SIZE],
-      position: [0, -0.5, 0],
-      material: new THREE.MeshStandardMaterial({
-        map: gridTexture('#1a1a1a', '#3d2a52', SIZE / 2),
-        roughness: 0.9,
-      }),
+    world.planetSize = SIZE
+
+    // The ground is drawn as tiles, because each object is moved as a whole
+    // to its nearest copy when the plaza repeats. It collides as one slab
+    // that reaches past the edges, so there is nothing to fall off.
+    const ground = new THREE.MeshStandardMaterial({
+      map: gridTexture('#1a1a1a', '#3d2a52', TILE / 2),
+      roughness: 0.9,
     })
+    for (let x = -SIZE / 2 + TILE / 2; x < SIZE / 2; x += TILE) {
+      for (let z = -SIZE / 2 + TILE / 2; z < SIZE / 2; z += TILE) {
+        world.addBox({
+          size: [TILE, 1, TILE],
+          position: [x, -0.5, z],
+          material: ground,
+          collide: false,
+        })
+      }
+    }
+    const reach = SIZE / 2 + 12
+    world.addCollider([-reach, -1, -reach], [reach, 0, reach])
 
     // Landmarks: without fixed reference points you cannot tell that space
     // has been stitched together wrongly.

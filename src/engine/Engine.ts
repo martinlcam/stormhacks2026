@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import type { World } from '../world/World'
+import { configurePlanet } from './bend'
 import { PlayerController } from './PlayerController'
 import { PortalRenderer } from './PortalRenderer'
 
@@ -35,6 +36,7 @@ export class Engine {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     this.portalRenderer = new PortalRenderer(this.renderer)
     this.portalRenderer.setPortals(world.portals)
+    configurePlanet(world.planetSize)
     this.player = new PlayerController(canvas)
 
     this.resizeObserver = new ResizeObserver(() => this.resize())
@@ -65,7 +67,7 @@ export class Engine {
     this.world.checkTriggers(this.player.position)
     this.world.update(dt, this.timer.getElapsed())
     this.player.applyTo(this.camera)
-    this.portalRenderer.render(this.world.scene, this.camera)
+    this.portalRenderer.render(this.world.scene, this.camera, this.player.position)
 
     this.frames++
     this.statsTime += dt

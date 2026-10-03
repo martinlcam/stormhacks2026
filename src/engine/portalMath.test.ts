@@ -61,3 +61,30 @@ test('portals of different scale resize what passes through', () => {
   // Heading is still a pure turn.
   expect(yawDelta(t)).toBeCloseTo(Math.PI, 6)
 })
+
+test('bending carries a doorway onto the sphere and stands it upright there', async () => {
+  const { apparentMotion, configurePlanet, curvatureAt } = await import('./bend')
+  configurePlanet(240)
+  const centre = new THREE.Vector3(0, 0, 0)
+  const k = curvatureAt(centre)
+  const radius = 1 / k
+  expect(radius).toBeCloseTo(240 / (2 * Math.PI), 6)
+
+  // A quarter of the way round: the foot is on the equator, "up" points out.
+  const foot = new THREE.Vector3(60, 0, 0)
+  const motion = apparentMotion(foot, centre, k, new THREE.Matrix4())
+  expectVec(foot.clone().applyMatrix4(motion), radius, -radius, 0)
+  expectVec(new THREE.Vector3(60, 2, 0).applyMatrix4(motion), radius + 2, -radius, 0)
+
+  // Nothing moves at the centre, and rooms outside the plaza are never bent.
+  expectVec(
+    new THREE.Vector3(0, 1, 0).applyMatrix4(apparentMotion(centre, centre, k, motion)),
+    0,
+    1,
+    0,
+  )
+  const room = new THREE.Vector3(600, 0, 0)
+  expect(curvatureAt(room)).toBe(0)
+  expectVec(room.clone().applyMatrix4(apparentMotion(room, centre, k, motion)), 600, 0, 0)
+  configurePlanet(null)
+})
