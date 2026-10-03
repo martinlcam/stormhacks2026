@@ -20,6 +20,8 @@ export interface DoorOptions {
   facing: 0 | 1 | 2 | 3
   width?: number
   height?: number
+  /** Shrinks or grows the whole door, frame included. Defaults to 1. */
+  scale?: number
   frameMaterial: THREE.Material
   /** Build a slab behind the opening, for doors that stand in the open. */
   backing?: THREE.Material
@@ -43,6 +45,7 @@ export class World {
   readonly colliders: THREE.Box3[] = []
   readonly portals: Portal[] = []
   private readonly updaters: Updater[] = []
+  private readonly triggers: { box: THREE.Box3; inside: boolean; onEnter: () => void }[] = []
 
   addBox({ size, position, material, collide = true }: BoxOptions): THREE.Mesh {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(...size), material)
@@ -57,7 +60,7 @@ export class World {
    * The portal goes nowhere until it is passed to `link`.
    */
   addDoor(options: DoorOptions): Portal {
-    const { position, facing, width = 1.2, height = 2.2, frameMaterial } = options
+    const { position, facing, width = 1.2, height = 2.2, scale = 1, frameMaterial } = options
     const yaw = (facing * Math.PI) / 2
     const cos = Math.round(Math.cos(yaw))
     const sin = Math.round(Math.sin(yaw))
@@ -66,11 +69,13 @@ export class World {
     // Place an axis-aligned box given in the door's local frame.
     const local = (size: Vec3, at: Vec3, material: THREE.Material) =>
       this.addBox({
-        size: sideways ? [size[2], size[1], size[0]] : size,
+        size: sideways
+          ? [size[2] * scale, size[1] * scale, size[0] * scale]
+          : [size[0] * scale, size[1] * scale, size[2] * scale],
         position: [
-          position[0] + at[0] * cos + at[2] * sin,
-          position[1] + at[1],
-          position[2] - at[0] * sin + at[2] * cos,
+          position[0] + (at[0] * cos + at[2] * sin) * scale,
+          position[1] + at[1] * scale,
+          position[2] + (-at[0] * sin + at[2] * cos) * scale,
         ],
         material,
       })
@@ -96,6 +101,7 @@ export class World {
       yaw,
       width,
       height,
+      scale,
     })
     this.portals.push(portal)
     return portal
@@ -105,6 +111,20 @@ export class World {
   link(a: Portal, b: Portal) {
     a.link(b)
     b.link(a)
+  }
+
+  /** Run `onEnter` each time the player's feet move into the box. */
+  addTrigger(min: Vec3, max: Vec3, onEnter: () => void) {
+    const box = new THREE.Box3(new THREE.Vector3(...min), new THREE.Vector3(...max))
+    this.triggers.push({ box, inside: false, onEnter })
+  }
+
+  checkTriggers(player: THREE.Vector3) {
+    for (const trigger of this.triggers) {
+      const inside = trigger.box.containsPoint(player)
+      if (inside && !trigger.inside) trigger.onEnter()
+      trigger.inside = inside
+    }
   }
 
   onUpdate(updater: Updater) {

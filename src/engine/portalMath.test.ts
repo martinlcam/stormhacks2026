@@ -48,3 +48,16 @@ test('yawDelta reports the turn a portal applies', () => {
   // Heading -Z comes out heading +X, a quarter turn clockwise seen from above.
   expect(yawDelta(portalTransform(src, side))).toBeCloseTo(-Math.PI / 2, 6)
 })
+
+test('portals of different scale resize what passes through', () => {
+  const src = frame(0, 0, 0, 0)
+  const dst = frame(20, 0, 0, 0).scale(new THREE.Vector3(0.25, 0.25, 0.25))
+  const t = portalTransform(src, dst)
+
+  // Eye height 1.6 in front of the tall door lands 0.4 up behind the small one.
+  const landed = new THREE.Vector3(0.4, 1.6, 0.8).applyMatrix4(t)
+  expectVec(landed, 20 - 0.1, 0.4, -0.2)
+  expect(t.getMaxScaleOnAxis()).toBeCloseTo(0.25, 6)
+  // Heading is still a pure turn.
+  expect(yawDelta(t)).toBeCloseTo(Math.PI, 6)
+})

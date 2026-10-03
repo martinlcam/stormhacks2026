@@ -62,6 +62,7 @@ function Stats() {
   const fps = useGame((s) => s.fps)
   const passes = useGame((s) => s.passes)
   const found = useGame((s) => s.found.length)
+  const scale = useGame((s) => s.scale)
   return (
     <div className="absolute top-3 right-4 text-right font-mono text-xs text-bone/50">
       <div>
@@ -70,8 +71,13 @@ function Stats() {
       <div className="text-cyan/80">
         {found} / {TOTAL} discovered
       </div>
+      {scale !== 1 && <div className="text-purple">size {formatScale(scale)}</div>}
     </div>
   )
+}
+
+function formatScale(scale: number) {
+  return scale < 1 ? `1/${Math.round(1 / scale)}` : `×${Math.round(scale)}`
 }
 
 function DiscoveryCard() {

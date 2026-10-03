@@ -3,6 +3,7 @@ import { World } from '../world/World'
 import { biggerInside } from '../world/structures/biggerInside'
 import { hub } from '../world/structures/hub'
 import { loopCorridor } from '../world/structures/loopCorridor'
+import { resizingDoors } from '../world/structures/resizingDoors'
 import { useGame } from './store'
 
 /**
@@ -18,6 +19,10 @@ export function bootstrap(canvas: HTMLCanvasElement): () => void {
     hub,
     biggerInside(() => game.discover('bigger-inside')),
     loopCorridor(() => game.discover('loop-corridor')),
+    resizingDoors(
+      () => game.discover('resizing-door'),
+      () => game.discover('small-world'),
+    ),
   ]
   for (const structure of structures) structure.build(world)
   world.finalize()
@@ -26,7 +31,7 @@ export function bootstrap(canvas: HTMLCanvasElement): () => void {
   engine.player.spawn.set(0, 0, 2)
   engine.player.respawn()
   engine.player.onLockChange = (locked) => game.setPlaying(locked)
-  engine.onStats = ({ fps, passes }) => game.setStats(fps, passes)
+  engine.onStats = ({ fps, passes, scale }) => game.setStats(fps, passes, scale)
   engine.start()
 
   if (import.meta.env.DEV) {

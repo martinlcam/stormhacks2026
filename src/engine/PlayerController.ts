@@ -30,6 +30,12 @@ export class PlayerController {
   readonly velocity = new THREE.Vector3()
   yaw = 0
   pitch = 0
+  /**
+   * Size relative to normal. Every length the player owns (body, stride,
+   * jump, gravity, eye height) is multiplied by it, so being small feels
+   * exactly like being normal-sized in a world that grew.
+   */
+  scale = 1
   onGround = false
   /** Where to put the player back if they fall out of the world. */
   readonly spawn = new THREE.Vector3()
@@ -72,12 +78,13 @@ export class PlayerController {
     this.velocity.set(0, 0, 0)
     this.yaw = this.spawnYaw
     this.pitch = 0
+    this.scale = 1
   }
 
   update(dt: number, colliders: readonly THREE.Box3[], portals: readonly Portal[]) {
     const forward = Number(this.keys.has('KeyW')) - Number(this.keys.has('KeyS'))
     const strafe = Number(this.keys.has('KeyD')) - Number(this.keys.has('KeyA'))
-    const speed = this.keys.has('ShiftLeft') ? RUN_SPEED : WALK_SPEED
+    const speed = (this.keys.has('ShiftLeft') ? RUN_SPEED : WALK_SPEED) * this.scale
 
     wish.set(strafe, 0, -forward)
     if (wish.lengthSq() > 0) wish.normalize().multiplyScalar(speed)
@@ -87,11 +94,11 @@ export class PlayerController {
     const blend = 1 - Math.exp(-(this.onGround ? 14 : 3) * dt)
     this.velocity.x += (wish.x - this.velocity.x) * blend
     this.velocity.z += (wish.z - this.velocity.z) * blend
-    this.velocity.y -= GRAVITY * dt
-    if (this.onGround && this.keys.has('Space')) this.velocity.y = JUMP_SPEED
+    this.velocity.y -= GRAVITY * this.scale * dt
+    if (this.onGround && this.keys.has('Space')) this.velocity.y = JUMP_SPEED * this.scale
 
     const distance = this.velocity.length() * dt
-    const steps = Math.max(1, Math.ceil(distance / MAX_STEP))
+    const steps = Math.max(1, Math.ceil(distance / (MAX_STEP * this.scale)))
     const stepDt = dt / steps
     for (let i = 0; i < steps; i++) this.step(stepDt, colliders, portals)
 
@@ -99,8 +106,12 @@ export class PlayerController {
   }
 
   applyTo(camera: THREE.PerspectiveCamera) {
-    camera.position.set(this.position.x, this.position.y + EYE_HEIGHT, this.position.z)
+    camera.position.set(this.position.x, this.position.y + EYE_HEIGHT * this.scale, this.position.z)
     camera.rotation.set(this.pitch, this.yaw, 0, 'YXZ')
+    // Scaling the camera measures the view in the player's own units, so the
+    // near plane and fog shrink with them, and the view through a resizing
+    // portal matches what they see once they have stepped through.
+    camera.scale.setScalar(this.scale)
     camera.updateMatrixWorld(true)
   }
 
@@ -115,13 +126,16 @@ export class PlayerController {
     before.copy(this.position)
     this.position.addScaledVector(this.velocity, dt)
 
-    const doorway = portals.find((portal) => portal.inDoorway(before))
+    const doorway = portals.find((portal) => this.fits(portal) && portal.inDoorway(before))
     this.collide(colliders, doorway)
     this.traverse(portals)
   }
 
   private collide(colliders: readonly THREE.Box3[], doorway: Portal | undefined) {
     const p = this.position
+    const radius = RADIUS * this.scale
+    const height = HEIGHT * this.scale
+    const stepHeight = STEP_HEIGHT * this.scale
     let ground = -Infinity
 
     for (const box of colliders) {
@@ -133,19 +147,19 @@ export class PlayerController {
       const dx = p.x - cx
       const dz = p.z - cz
       const distSq = dx * dx + dz * dz
-      if (distSq >= RADIUS * RADIUS) continue
+      if (distSq >= radius * radius) continue
 
       // Low enough to stand on or step up: it's floor, not wall.
-      if (box.max.y <= p.y + STEP_HEIGHT) {
+      if (box.max.y <= p.y + stepHeight) {
         // Only the middle of the footprint counts, so you can't hover on edges.
-        if (distSq < RADIUS * RADIUS * 0.25) ground = Math.max(ground, box.max.y)
+        if (distSq < radius * radius * 0.25) ground = Math.max(ground, box.max.y)
         continue
       }
-      if (box.min.y >= p.y + HEIGHT) continue
+      if (box.min.y >= p.y + height) continue
 
       if (distSq > 1e-10) {
         const dist = Math.sqrt(distSq)
-        const push = (RADIUS - dist) / dist
+        const push = (radius - dist) / dist
         p.x += dx * push
         p.z += dz * push
       } else {
@@ -155,10 +169,10 @@ export class PlayerController {
         const back = p.z - box.min.z
         const front = box.max.z - p.z
         const least = Math.min(left, right, back, front)
-        if (least === left) p.x = box.min.x - RADIUS
-        else if (least === right) p.x = box.max.x + RADIUS
-        else if (least === back) p.z = box.min.z - RADIUS
-        else p.z = box.max.z + RADIUS
+        if (least === left) p.x = box.min.x - radius
+        else if (least === right) p.x = box.max.x + radius
+        else if (least === back) p.z = box.min.z - radius
+        else p.z = box.max.z + radius
       }
     }
 
@@ -168,6 +182,10 @@ export class PlayerController {
       this.velocity.y = 0
       this.onGround = true
     }
+  }
+
+  private fits(portal: Portal) {
+    return portal.fits(RADIUS * 2 * this.scale, HEIGHT * this.scale)
   }
 
   /** Carry the player through any portal their path crossed this step. */
@@ -180,10 +198,13 @@ export class PlayerController {
       // Where the path met the plane must be inside the opening.
       const t = localBefore.z / (localBefore.z - localAfter.z)
       localBefore.lerp(localAfter, t)
-      if (!portal.withinOpening(localBefore)) continue
+      if (!portal.withinOpening(localBefore) || !this.fits(portal)) continue
 
       this.position.applyMatrix4(portal.transform)
-      const speed = this.velocity.length()
+      // A resizing portal changes the player and their speed by the same ratio.
+      const ratio = portal.target.scale / portal.scale
+      const speed = this.velocity.length() * ratio
+      this.scale *= ratio
       this.velocity.transformDirection(portal.transform).multiplyScalar(speed)
       this.yaw += yawDelta(portal.transform)
       portal.onTraverse?.()

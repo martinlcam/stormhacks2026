@@ -15,8 +15,14 @@ export interface PortalOptions {
   position: THREE.Vector3
   /** Rotation about the vertical axis; yaw 0 means the front faces world +Z. */
   yaw: number
+  /** Size of the opening before `scale` is applied. */
   width: number
   height: number
+  /**
+   * Uniform size multiplier. Linking portals of different scale makes a
+   * doorway that resizes whatever passes through it.
+   */
+  scale?: number
 }
 
 const corner = new THREE.Vector3()
@@ -26,6 +32,7 @@ export class Portal {
   readonly name: string
   readonly width: number
   readonly height: number
+  readonly scale: number
   /** Stencil/depth surface. Never added to the world scene. */
   readonly mesh: THREE.Mesh
   /** World plane of the opening, normal pointing out of the front. */
@@ -49,12 +56,14 @@ export class Portal {
     this.name = options.name
     this.width = options.width
     this.height = options.height
+    this.scale = options.scale ?? 1
 
     const geometry = new THREE.BoxGeometry(options.width, options.height, PORTAL_THICKNESS)
     geometry.translate(0, options.height / 2, -PORTAL_THICKNESS / 2)
     this.mesh = new THREE.Mesh(geometry)
     this.mesh.position.copy(options.position)
     this.mesh.rotation.y = options.yaw
+    this.mesh.scale.setScalar(this.scale)
     this.mesh.updateMatrixWorld(true)
 
     this.worldInverse.copy(this.mesh.matrixWorld).invert()
@@ -69,7 +78,10 @@ export class Portal {
     portalTransform(this.mesh.matrixWorld, target.mesh.matrixWorld, this.transform)
   }
 
-  /** World point → this portal's local frame (opening in XY, front is +Z). */
+  /**
+   * World point → this portal's local frame (opening in XY, front is +Z).
+   * Local lengths are in units of the portal's own scale.
+   */
   toLocal(world: THREE.Vector3, out: THREE.Vector3): THREE.Vector3 {
     return out.copy(world).applyMatrix4(this.worldInverse)
   }
@@ -77,6 +89,11 @@ export class Portal {
   /** True when a local-space point is inside the opening's footprint. */
   withinOpening(p: THREE.Vector3, margin = 0): boolean {
     return Math.abs(p.x) <= this.width / 2 - margin && p.y >= -0.6 && p.y <= this.height
+  }
+
+  /** Can a body this wide and tall (world units) pass through the opening? */
+  fits(diameter: number, height: number): boolean {
+    return diameter <= this.width * this.scale && height <= this.height * this.scale
   }
 
   /** True while a point stands in the doorway, just in front of the plane. */

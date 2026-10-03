@@ -6,6 +6,8 @@ interface GameState {
   playing: boolean
   fps: number
   passes: number
+  /** The player's size relative to normal. */
+  scale: number
   /** Ids of everything found so far, in order. */
   found: DiscoveryId[]
   /** The card currently on screen, if any. */
@@ -14,7 +16,7 @@ interface GameState {
   prompt: string | null
 
   setPlaying(playing: boolean): void
-  setStats(fps: number, passes: number): void
+  setStats(fps: number, passes: number, scale: number): void
   setPrompt(prompt: string | null): void
   discover(id: DiscoveryId): void
   dismissCard(): void
@@ -28,12 +30,13 @@ export const useGame = create<GameState>((set, get) => ({
   playing: false,
   fps: 0,
   passes: 0,
+  scale: 1,
   found: [],
   card: null,
   prompt: null,
 
   setPlaying: (playing) => set({ playing }),
-  setStats: (fps, passes) => set({ fps, passes }),
+  setStats: (fps, passes, scale) => set({ fps, passes, scale }),
   setPrompt: (prompt) => set({ prompt }),
   discover: (id) => {
     if (get().found.includes(id)) return

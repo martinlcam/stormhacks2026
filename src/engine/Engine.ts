@@ -7,6 +7,8 @@ export interface FrameStats {
   fps: number
   /** How many times the world was drawn this frame (1 + portal views). */
   passes: number
+  /** The player's size relative to normal: 0.25 is a quarter height. */
+  scale: number
 }
 
 /** Owns the canvas, the frame loop, the player and the portal renderer. */
@@ -60,6 +62,7 @@ export class Engine {
     if (this.player.locked || !this.running) {
       this.player.update(dt, this.world.colliders, this.world.portals)
     }
+    this.world.checkTriggers(this.player.position)
     this.world.update(dt, this.timer.getElapsed())
     this.player.applyTo(this.camera)
     this.portalRenderer.render(this.world.scene, this.camera)
@@ -70,6 +73,7 @@ export class Engine {
       this.onStats?.({
         fps: Math.round(this.frames / this.statsTime),
         passes: this.portalRenderer.passes,
+        scale: this.player.scale,
       })
       this.frames = 0
       this.statsTime = 0
