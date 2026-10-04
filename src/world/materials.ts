@@ -162,6 +162,46 @@ export function glow(color: number, intensity = 1.6): THREE.MeshStandardMaterial
   })
 }
 
+/* A plain, stencil-aware sky for repeatable lighting comparisons. */
+export function createSky(top = 0x05030a, horizon = 0x3a1a52): THREE.Mesh {
+  const material = new THREE.ShaderMaterial({
+    side: THREE.BackSide,
+    depthWrite: false,
+    uniforms: {
+      top: { value: new THREE.Color(top) },
+      horizon: { value: new THREE.Color(horizon) },
+      uSkyUp: planetUniforms.uSkyUp,
+    },
+    vertexShader: /* glsl */ `
+      varying vec3 vDirection;
+      void main() {
+        vDirection = position;
+        // z = w pins the sky to the far plane. It must still be depth tested,
+        // or it would paint over the portal views sealed in front of it.
+        gl_Position = (projectionMatrix * vec4(mat3(viewMatrix) * position, 1.0)).xyww;
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      uniform vec3 top;
+      uniform vec3 horizon;
+      uniform vec3 uSkyUp;
+      varying vec3 vDirection;
+      void main() {
+        // Height above the horizon of whoever is looking, wherever on the
+        // planet they stand.
+        float h = dot(normalize(vDirection), uSkyUp);
+        vec3 color = mix(horizon, top, smoothstep(-0.05, 0.6, h));
+        gl_FragColor = vec4(color, 1.0);
+        #include <colorspace_fragment>
+      }
+    `,
+  })
+  const sky = new THREE.Mesh(new THREE.SphereGeometry(50, 24, 12), material)
+  sky.renderOrder = -1000
+  sky.frustumCulled = false
+  return sky
+}
+
 /*
   The skies, each as three colours: overhead, part of the way down, and at
   the horizon. The first two are the dusk and the storm from the landing

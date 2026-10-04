@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { materialAt, planetMaterial, planetUniforms, POLE, type Site, siteOf } from './planet'
 import type { Portal } from './Portal'
+import type { PortalLighting } from './PortalLighting'
 
 /*
   A plane that keeps everything, so the clipping-plane count never changes
@@ -58,6 +59,8 @@ export class PortalRenderer {
   beforePass?: (doors: number) => void
   /* Scene passes drawn last frame, for the debug HUD. */
   passes = 0
+  /* Optional point-light transport; the normal game has no registered emitters yet. */
+  portalLighting?: PortalLighting
 
   private readonly clipPlane = NO_CLIP.clone()
   private readonly portalScene = new THREE.Scene()
@@ -92,6 +95,7 @@ export class PortalRenderer {
   private portals: readonly Portal[] = []
 
   constructor(private readonly renderer: THREE.WebGLRenderer) {
+    renderer.localClippingEnabled = true
     renderer.autoClear = false
     renderer.clippingPlanes = [this.clipPlane]
     this.limitMaterial.color.copy(this.depthLimitColor)
@@ -112,6 +116,7 @@ export class PortalRenderer {
   /* `up` is which way is up for the camera, in space; the sky follows it. */
   render(scene: THREE.Scene, camera: THREE.PerspectiveCamera, up: THREE.Vector3) {
     this.passes = 0
+    this.portalLighting?.update()
     this.collectMaterials(scene)
     this.renderer.clear(true, true, true)
     this.renderLevel(scene, camera, 0, null, up, this.maxPasses)
@@ -182,6 +187,7 @@ export class PortalRenderer {
     // 5. world
     for (const material of this.worldMaterials) material.stencilRef = level
     planetUniforms.uSkyUp.value.copy(up)
+    this.portalLighting?.prepareCamera(camera)
     this.beforePass?.(level)
     this.renderer.render(scene, camera)
     this.passes++
@@ -274,6 +280,7 @@ export class PortalRenderer {
       for (const m of Array.isArray(material) ? material : [material]) {
         if (!this.worldMaterials.has(m)) {
           planetMaterial(m)
+          this.portalLighting?.apply(m)
           m.stencilWrite = true
           m.stencilFunc = THREE.EqualStencilFunc
           this.worldMaterials.add(m)
