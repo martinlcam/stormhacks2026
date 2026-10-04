@@ -7,9 +7,23 @@ import { portalTransform } from './portalMath'
   How far the portal surface extends behind its plane. The surface is a box
   rather than a quad so that when the camera's near plane pokes through the
   opening (the frame before a teleport) the box's inner walls still cover the
-  screen and nothing flickers. Must exceed the near-plane corner distance.
+  screen and nothing flickers.
+
+  It is bounded on both sides. It must be deeper than the furthest corner of
+  the camera's near plane (see NEAR in Engine.ts), or that corner comes out
+  of the back. And it must be shallower than BACKING_GAP: once the near
+  plane has cut away the front of the box, its back is what hides the wall
+  behind the door, so the back has to be in front of that wall. When it was
+  deeper, the wall covered the whole screen for the last few centimetres
+  before every crossing, which showed as a dark flicker.
 */
-export const PORTAL_THICKNESS = 0.3
+export const PORTAL_THICKNESS = 0.095
+
+/*
+  The least distance from a portal's plane back to anything solid behind it:
+  the slab or wall the door is mounted on.
+*/
+export const BACKING_GAP = 0.1
 
 export interface PortalOptions {
   name: string

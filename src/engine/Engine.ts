@@ -12,10 +12,18 @@ export interface FrameStats {
   scale: number
 }
 
+/*
+  Distance to the camera's near plane, for a player of scale 1. Its furthest
+  corner, at a 75° field of view, is about 1.9 times this away on a 16:9
+  screen and 3 times on a 32:9 one, and that must stay inside
+  PORTAL_THICKNESS.
+*/
+const NEAR = 0.03
+
 /* Owns the canvas, the frame loop, the player and the portal renderer. */
 export class Engine {
   readonly renderer: THREE.WebGLRenderer
-  readonly camera = new THREE.PerspectiveCamera(75, 1, 0.05, 150)
+  readonly camera = new THREE.PerspectiveCamera(75, 1, NEAR, 150)
   readonly player: PlayerController
   readonly portalRenderer: PortalRenderer
   /* Reported about twice a second. */
