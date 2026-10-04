@@ -1,10 +1,10 @@
 import * as THREE from 'three'
-import { apparentMotion, bendMaterial, curvatureAt, setBend } from './bend'
+import { planetMaterial, planetUniforms } from './planet'
 import type { Portal } from './Portal'
 
 /*
   A plane that keeps everything, so the clipping-plane count never changes
-   between passes (changing it would recompile every shader).
+  between passes (changing it would recompile every shader).
 */
 const NO_CLIP = new THREE.Plane(new THREE.Vector3(0, 1, 0), 1e6)
 
@@ -30,11 +30,9 @@ const NO_CLIP = new THREE.Plane(new THREE.Vector3(0, 1, 0), 1e6)
   Each virtual view is clipped at the destination portal's plane so the wall
   behind the exit never blocks the view.
 
-  Curvature: every pass is drawn bent around a centre (see bend.ts). The
-  player's own view is centred on the player. A view through a portal is
-  centred on the far door, so the far side is undistorted where it meets the
-  doorway, and the virtual camera is moved by the inverse of the bend's
-  motion at the near door, so the two sides line up.
+  Portals on the planet are drawn where the vertex shader puts them, so all
+  the tests and camera transforms here use each portal's place in space
+  (`spacePlane`, `spaceCenter`, `view`), not its place on the flat map.
 */
 export class PortalRenderer {
   /* Portals seen through portals seen through portals… */
@@ -64,15 +62,12 @@ export class PortalRenderer {
     stencilFunc: THREE.EqualStencilFunc,
   })
   private readonly cameras: THREE.PerspectiveCamera[] = []
+  private readonly ups: THREE.Vector3[] = []
   private readonly visibleLists: Portal[][] = []
   private readonly frustum = new THREE.Frustum()
   private readonly viewProjection = new THREE.Matrix4()
   private readonly eye = new THREE.Vector3()
-  private readonly point = new THREE.Vector3()
   private readonly sphere = new THREE.Sphere()
-  private readonly scratch = new THREE.Matrix4()
-  /* Per recursion level, per portal: how bending moves that doorway. */
-  private readonly motions: THREE.Matrix4[][] = []
   private readonly worldMaterials = new Set<THREE.Material>()
   private portals: readonly Portal[] = []
 
@@ -81,7 +76,7 @@ export class PortalRenderer {
     renderer.clippingPlanes = [this.clipPlane]
     this.limitMaterial.color.copy(this.depthLimitColor)
     for (const material of [this.maskMaterial, this.sealMaterial, this.limitMaterial]) {
-      bendMaterial(material)
+      planetMaterial(material)
     }
   }
 
@@ -94,12 +89,12 @@ export class PortalRenderer {
     }
   }
 
-  /* `centre` is the point the world is bent around: the player's feet. */
-  render(scene: THREE.Scene, camera: THREE.PerspectiveCamera, centre: THREE.Vector3) {
+  /* `up` is which way is up for the camera, in space; the sky follows it. */
+  render(scene: THREE.Scene, camera: THREE.PerspectiveCamera, up: THREE.Vector3) {
     this.passes = 0
     this.collectMaterials(scene)
     this.renderer.clear(true, true, true)
-    this.renderLevel(scene, camera, 0, null, centre, curvatureAt(centre))
+    this.renderLevel(scene, camera, 0, null, up)
   }
 
   private renderLevel(
@@ -107,18 +102,15 @@ export class PortalRenderer {
     camera: THREE.PerspectiveCamera,
     level: number,
     exit: Portal | null,
-    centre: THREE.Vector3,
-    k: number,
+    up: THREE.Vector3,
   ) {
-    const clip = exit ? exit.plane : NO_CLIP
-    const visible = this.findVisible(camera, level, exit, centre, k)
-    const motions = this.motions[level]
+    const clip = exit ? exit.spacePlane : NO_CLIP
+    const visible = this.findVisible(camera, level, exit)
 
     if (level < this.maxDepth) {
       for (const portal of visible) {
         // 1. mark
         this.clipPlane.copy(clip)
-        setBend(centre, k)
         this.maskMaterial.stencilRef = level
         this.maskMaterial.stencilFunc = THREE.EqualStencilFunc
         this.maskMaterial.stencilZPass = THREE.IncrementStencilOp
@@ -126,16 +118,15 @@ export class PortalRenderer {
 
         // 2. inside
         const virtual = this.cameraFor(level, camera)
-        const unbend = this.scratch.copy(motions[this.portals.indexOf(portal)]).invert()
-        virtual.matrixWorld.multiplyMatrices(portal.transform, unbend).multiply(camera.matrixWorld)
+        virtual.matrixWorld.multiplyMatrices(portal.view, camera.matrixWorld)
         virtual.matrixWorld.decompose(virtual.position, virtual.quaternion, virtual.scale)
         virtual.updateMatrixWorld(true)
-        const far = portal.target.mesh.position
-        this.renderLevel(scene, virtual, level + 1, portal.target, far, curvatureAt(far))
+        const virtualUp = (this.ups[level] ??= new THREE.Vector3())
+        virtualUp.copy(up).transformDirection(portal.view)
+        this.renderLevel(scene, virtual, level + 1, portal.target, virtualUp)
 
         // 3. unmark
         this.clipPlane.copy(clip)
-        setBend(centre, k)
         this.maskMaterial.stencilRef = level + 1
         this.maskMaterial.stencilZPass = THREE.DecrementStencilOp
         this.drawPortals([portal], this.maskMaterial, camera)
@@ -144,7 +135,6 @@ export class PortalRenderer {
 
     // 4. seal
     this.clipPlane.copy(clip)
-    setBend(centre, k)
     this.renderer.state.buffers.depth.setMask(true)
     this.renderer.clearDepth()
     if (level < this.maxDepth) {
@@ -153,6 +143,7 @@ export class PortalRenderer {
 
     // 5. world
     for (const material of this.worldMaterials) material.stencilRef = level
+    planetUniforms.uSkyUp.value.copy(up)
     this.renderer.render(scene, camera)
     this.passes++
 
@@ -174,42 +165,24 @@ export class PortalRenderer {
 
   /*
     Portals this camera faces and has in view, farthest first so nearer
-     portals paint over farther ones where they overlap on screen.
+    portals paint over farther ones where they overlap on screen.
   */
-  private findVisible(
-    camera: THREE.PerspectiveCamera,
-    level: number,
-    exit: Portal | null,
-    centre: THREE.Vector3,
-    k: number,
-  ) {
+  private findVisible(camera: THREE.PerspectiveCamera, level: number, exit: Portal | null) {
     const list = (this.visibleLists[level] ??= [])
     list.length = 0
-    const motions = (this.motions[level] ??= [])
     this.viewProjection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)
     this.frustum.setFromProjectionMatrix(this.viewProjection)
     const eye = this.eye.setFromMatrixPosition(camera.matrixWorld)
-    const distance = new Map<Portal, number>()
-    for (let i = 0; i < this.portals.length; i++) {
-      const portal = this.portals[i]
-      // Test against the doorway where bending puts it, not where it is stored.
-      const motion = apparentMotion(
-        portal.mesh.position,
-        centre,
-        k,
-        (motions[i] ??= new THREE.Matrix4()),
-      )
+    for (const portal of this.portals) {
       if (portal === exit) continue
-      this.scratch.copy(motion).invert()
-      if (portal.plane.distanceToPoint(this.point.copy(eye).applyMatrix4(this.scratch)) <= 0)
-        continue
-      this.sphere.center.copy(portal.center).applyMatrix4(motion)
+      if (portal.spacePlane.distanceToPoint(eye) <= 0) continue
+      this.sphere.center.copy(portal.spaceCenter)
       this.sphere.radius = portal.radius
       if (!this.frustum.intersectsSphere(this.sphere)) continue
-      distance.set(portal, this.sphere.center.distanceToSquared(eye))
       list.push(portal)
     }
-    list.sort((a, b) => distance.get(b)! - distance.get(a)!)
+    const at = eye.clone()
+    list.sort((a, b) => b.spaceCenter.distanceToSquared(at) - a.spaceCenter.distanceToSquared(at))
     return list
   }
 
@@ -222,7 +195,7 @@ export class PortalRenderer {
 
   /*
     Every world material has to honour the stencil mask. Done per frame so
-     structures can add meshes at any time without registering them.
+    structures can add meshes at any time without registering them.
   */
   private collectMaterials(scene: THREE.Scene) {
     this.worldMaterials.clear()
@@ -231,7 +204,7 @@ export class PortalRenderer {
       if (!material) return
       for (const m of Array.isArray(material) ? material : [material]) {
         if (!this.worldMaterials.has(m)) {
-          bendMaterial(m)
+          planetMaterial(m)
           m.stencilWrite = true
           m.stencilFunc = THREE.EqualStencilFunc
           this.worldMaterials.add(m)

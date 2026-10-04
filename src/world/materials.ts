@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { planetUniforms } from '../engine/planet'
 
 export const palette = {
   purple: 0xc252e1,
@@ -52,6 +53,7 @@ export function createSky(): THREE.Mesh {
     uniforms: {
       top: { value: new THREE.Color(0x05030a) },
       horizon: { value: new THREE.Color(0x3a1a52) },
+      uSkyUp: planetUniforms.uSkyUp,
     },
     vertexShader: /* glsl */ `
       varying vec3 vDirection;
@@ -65,9 +67,12 @@ export function createSky(): THREE.Mesh {
     fragmentShader: /* glsl */ `
       uniform vec3 top;
       uniform vec3 horizon;
+      uniform vec3 uSkyUp;
       varying vec3 vDirection;
       void main() {
-        float h = normalize(vDirection).y;
+        // Height above the horizon of whoever is looking, wherever on the
+        // planet they stand.
+        float h = dot(normalize(vDirection), uSkyUp);
         vec3 color = mix(horizon, top, smoothstep(-0.05, 0.6, h));
         gl_FragColor = vec4(color, 1.0);
         #include <colorspace_fragment>

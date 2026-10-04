@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import type { World } from '../world/World'
-import { configurePlanet } from './bend'
+import { configurePlanet, upAt } from './planet'
 import { PlayerController } from './PlayerController'
 import { PortalRenderer } from './PortalRenderer'
 
@@ -22,6 +22,7 @@ export class Engine {
   onStats?: (stats: FrameStats) => void
 
   private readonly timer = new THREE.Timer()
+  private readonly up = new THREE.Vector3()
   private readonly resizeObserver: ResizeObserver
   private frames = 0
   private statsTime = 0
@@ -37,6 +38,7 @@ export class Engine {
     this.portalRenderer = new PortalRenderer(this.renderer)
     this.portalRenderer.setPortals(world.portals)
     configurePlanet(world.planetSize)
+    for (const portal of world.portals) portal.settle()
     this.player = new PlayerController(canvas)
 
     this.resizeObserver = new ResizeObserver(() => this.resize())
@@ -67,7 +69,7 @@ export class Engine {
     this.world.checkTriggers(this.player.position)
     this.world.update(dt, this.timer.getElapsed())
     this.player.applyTo(this.camera)
-    this.portalRenderer.render(this.world.scene, this.camera, this.player.position)
+    this.portalRenderer.render(this.world.scene, this.camera, upAt(this.player.position, this.up))
 
     this.frames++
     this.statsTime += dt

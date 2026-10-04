@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { wrapToPlaza } from './bend'
+import { onPlanet, standOnPlanet, walkOnPlanet } from './planet'
 import type { Portal } from './Portal'
 import { yawDelta } from './portalMath'
 
@@ -107,8 +107,13 @@ export class PlayerController {
   }
 
   applyTo(camera: THREE.PerspectiveCamera) {
-    camera.position.set(this.position.x, this.position.y + EYE_HEIGHT * this.scale, this.position.z)
-    camera.rotation.set(this.pitch, this.yaw, 0, 'YXZ')
+    const eye = EYE_HEIGHT * this.scale
+    if (onPlanet(this.position)) {
+      standOnPlanet(camera, this.position, eye, this.yaw, this.pitch)
+    } else {
+      camera.position.set(this.position.x, this.position.y + eye, this.position.z)
+      camera.rotation.set(this.pitch, this.yaw, 0, 'YXZ')
+    }
     // Scaling the camera measures the view in the player's own units, so the
     // near plane and fog shrink with them, and the view through a resizing
     // portal matches what they see once they have stepped through.
@@ -125,12 +130,19 @@ export class PlayerController {
 
   private step(dt: number, colliders: readonly THREE.Box3[], portals: readonly Portal[]) {
     before.copy(this.position)
-    this.position.addScaledVector(this.velocity, dt)
+    if (onPlanet(this.position)) {
+      walkOnPlanet(this, dt)
+      this.position.y += this.velocity.y * dt
+    } else {
+      this.position.addScaledVector(this.velocity, dt)
+    }
 
     const doorway = portals.find((portal) => this.fits(portal) && portal.inDoorway(before))
     this.collide(colliders, doorway)
-    this.traverse(portals)
-    wrapToPlaza(this.position)
+    // Passing the point opposite the pole moves the walker to the far side
+    // of the map in one step. That is not a path a portal could be on.
+    const jumped = before.distanceTo(this.position) > this.velocity.length() * dt * 4 + 1
+    if (!jumped) this.traverse(portals)
   }
 
   private collide(colliders: readonly THREE.Box3[], doorway: Portal | undefined) {

@@ -48,8 +48,8 @@ export class World {
   readonly colliders: THREE.Box3[] = []
   readonly portals: Portal[] = []
   /*
-    Side of the square plaza around the origin that is drawn as a planet, or
-    null for a flat world. Walking off one edge enters at the opposite edge.
+    Circumference of the planet that the plaza around the origin is drawn
+    as, or null for a flat world.
   */
   planetSize: number | null = null
   private readonly updaters: Updater[] = []

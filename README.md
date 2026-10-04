@@ -21,7 +21,6 @@
 - Draw each portal view only in the screen rectangle of the portal.
 - Remove the short stop when the player goes through a portal.
 - Bend the surface normals so that the light agrees with the curved ground.
-- Correct the small door offset when a curved door is seen from far away.
 - Add a key that sends the player back to the start.
 - Add the surveyor story, and a different colour and landmark for each district.
 - Add sound.

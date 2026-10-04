@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { planetMotion } from './planet'
 import { portalTransform } from './portalMath'
 
 /*
@@ -26,6 +27,7 @@ export interface PortalOptions {
 }
 
 const corner = new THREE.Vector3()
+const scratch = new THREE.Matrix4()
 const local = new THREE.Vector3()
 
 export class Portal {
@@ -39,6 +41,16 @@ export class Portal {
   readonly plane = new THREE.Plane()
   readonly worldBounds = new THREE.Box3()
   readonly center = new THREE.Vector3()
+  /*
+    Where the opening really is in space. For a portal on the planet this is
+    its place on the sphere; for a portal in a flat room it equals `plane`
+    and `center`. Set by `settle`.
+  */
+  readonly spacePlane = new THREE.Plane()
+  readonly spaceCenter = new THREE.Vector3()
+  /* Carries a camera in space through this portal to the target's side. */
+  readonly view = new THREE.Matrix4()
+  private readonly motion = new THREE.Matrix4()
   /* Radius of a sphere around `center` that contains the whole opening. */
   readonly radius: number
   /* Carries the world through this portal to its target's side. */
@@ -74,6 +86,19 @@ export class Portal {
     this.plane.setFromNormalAndCoplanarPoint(normal, options.position)
     this.worldBounds.setFromObject(this.mesh)
     this.center.set(0, options.height / 2, 0).applyMatrix4(this.mesh.matrixWorld)
+  }
+
+  /*
+    Work out where this portal and its target stand in space. Call for every
+    portal once they are all linked and the planet is configured.
+  */
+  settle() {
+    planetMotion(this.mesh.position, this.motion)
+    this.spacePlane.copy(this.plane).applyMatrix4(this.motion)
+    this.spaceCenter.copy(this.center).applyMatrix4(this.motion)
+    // Undo this door's motion, cross on the flat map, apply the far door's.
+    const far = planetMotion(this.target.mesh.position, this.view)
+    this.view.copy(far).multiply(this.transform).multiply(scratch.copy(this.motion).invert())
   }
 
   link(target: Portal) {

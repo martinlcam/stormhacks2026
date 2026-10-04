@@ -62,29 +62,73 @@ test('portals of different scale resize what passes through', () => {
   expect(yawDelta(t)).toBeCloseTo(Math.PI, 6)
 })
 
-test('bending carries a doorway onto the sphere and stands it upright there', async () => {
-  const { apparentMotion, configurePlanet, curvatureAt } = await import('./bend')
+test('a doorway on the map is carried to the sphere and stands upright there', async () => {
+  const { configurePlanet, onPlanet, planetMotion } = await import('./planet')
   configurePlanet(240)
-  const centre = new THREE.Vector3(0, 0, 0)
-  const k = curvatureAt(centre)
-  const radius = 1 / k
-  expect(radius).toBeCloseTo(240 / (2 * Math.PI), 6)
+  const radius = 240 / (2 * Math.PI)
 
   // A quarter of the way round: the foot is on the equator, "up" points out.
   const foot = new THREE.Vector3(60, 0, 0)
-  const motion = apparentMotion(foot, centre, k, new THREE.Matrix4())
+  const motion = planetMotion(foot, new THREE.Matrix4())
   expectVec(foot.clone().applyMatrix4(motion), radius, -radius, 0)
   expectVec(new THREE.Vector3(60, 2, 0).applyMatrix4(motion), radius + 2, -radius, 0)
 
-  // Nothing moves at the centre, and rooms outside the plaza are never bent.
-  expectVec(
-    new THREE.Vector3(0, 1, 0).applyMatrix4(apparentMotion(centre, centre, k, motion)),
-    0,
-    1,
-    0,
-  )
+  // Nothing moves at the pole, and rooms off the map disk are never moved.
+  const pole = new THREE.Vector3()
+  expectVec(new THREE.Vector3(0, 1, 0).applyMatrix4(planetMotion(pole, motion)), 0, 1, 0)
   const room = new THREE.Vector3(600, 0, 0)
-  expect(curvatureAt(room)).toBe(0)
-  expectVec(room.clone().applyMatrix4(apparentMotion(room, centre, k, motion)), 600, 0, 0)
+  expect(onPlanet(room)).toBe(false)
+  expectVec(room.clone().applyMatrix4(planetMotion(room, motion)), 600, 0, 0)
+  configurePlanet(null)
+})
+
+test('walking straight in any direction returns to the start after one lap', async () => {
+  const { configurePlanet, walkOnPlanet } = await import('./planet')
+  configurePlanet(240)
+  for (const [x, z, yaw] of [
+    [0, 0, 0],
+    [7, -3, 0.9],
+    [-20, 35, 2.4],
+    [50, 10, -1.1],
+  ]) {
+    const speed = 6
+    const walker = {
+      position: new THREE.Vector3(x, 0, z),
+      velocity: new THREE.Vector3(-Math.sin(yaw) * speed, 0, -Math.cos(yaw) * speed),
+      yaw,
+    }
+    const steps = 2400
+    const dt = 240 / speed / steps
+    for (let i = 0; i < steps; i++) walkOnPlanet(walker, dt)
+    expect(walker.position.x).toBeCloseTo(x, 3)
+    expect(walker.position.z).toBeCloseTo(z, 3)
+    expect(Math.cos(walker.yaw - yaw)).toBeCloseTo(1, 6)
+  }
+  configurePlanet(null)
+})
+
+test('walking three sides of a triangle on the planet turns the walker', async () => {
+  const { configurePlanet, walkOnPlanet } = await import('./planet')
+  configurePlanet(240)
+  // Pole → equator, a quarter turn along the equator, back to the pole:
+  // a triangle with three right angles, without the walker ever turning.
+  const walker = {
+    position: new THREE.Vector3(),
+    velocity: new THREE.Vector3(1, 0, 0),
+    yaw: -Math.PI / 2,
+  }
+  const leg = (vx: number, vz: number) => {
+    walker.velocity.set(vx, 0, vz)
+    for (let i = 0; i < 600; i++) walkOnPlanet(walker, 0.1)
+    return walker.velocity.clone()
+  }
+  leg(1, 0) // 60 m "east" to the equator
+  expectVec(walker.position, 60, 0, 0)
+  leg(0, 1) // 60 m along the equator
+  expectVec(walker.position, 0, 0, 60)
+  leg(0, -1) // 60 m back to the pole
+  expect(walker.position.length()).toBeCloseTo(0, 3)
+  // The walker never turned, yet now faces a quarter turn from where they began.
+  expect(Math.abs(Math.sin(walker.yaw - -Math.PI / 2))).toBeCloseTo(1, 4)
   configurePlanet(null)
 })

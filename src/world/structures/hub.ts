@@ -3,11 +3,47 @@ import type { Structure } from '../World'
 import { createSky, glow, gridTexture, matte, palette } from '../materials'
 
 /*
-  Side of the plaza. It is drawn as a planet whose circumference is this
-  length, so the radius is SIZE / 2π, about 38 m.
+  Distance around the planet. Its radius is this / 2π, about 38 m, and the
+  flat map of it is a disk of radius CIRCUMFERENCE / 2.
 */
-const SIZE = 240
-const TILE = 20
+const CIRCUMFERENCE = 240
+
+/*
+  The whole ground as one disk on the flat map. The planet shader closes it
+  into a sphere: the centre is the pole and the rim is the point opposite.
+*/
+function groundDisk(radius: number, rings: number, sectors: number): THREE.BufferGeometry {
+  const positions: number[] = []
+  const normals: number[] = []
+  const uvs: number[] = []
+  const indices: number[] = []
+  for (let ring = 0; ring <= rings; ring++) {
+    const r = (ring / rings) * radius
+    for (let sector = 0; sector <= sectors; sector++) {
+      const angle = (sector / sectors) * Math.PI * 2
+      const x = Math.cos(angle) * r
+      const z = Math.sin(angle) * r
+      positions.push(x, 0, z)
+      normals.push(0, 1, 0)
+      // One grid square every two metres of map.
+      uvs.push(x / 2, z / 2)
+    }
+  }
+  const row = sectors + 1
+  for (let ring = 0; ring < rings; ring++) {
+    for (let sector = 0; sector < sectors; sector++) {
+      const a = ring * row + sector
+      const b = a + row
+      indices.push(a, a + 1, b, b, a + 1, b + 1)
+    }
+  }
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3))
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2))
+  geometry.setIndex(indices)
+  return geometry
+}
 
 /* The open plaza every other structure stands on. */
 export const hub: Structure = {
@@ -20,27 +56,20 @@ export const hub: Structure = {
     sun.position.set(30, 60, 20)
     world.scene.add(sun)
 
-    world.planetSize = SIZE
+    world.planetSize = CIRCUMFERENCE
 
-    // The ground is drawn as tiles, because each object is moved as a whole
-    // to its nearest copy when the plaza repeats. It collides as one slab
-    // that reaches past the edges, so there is nothing to fall off.
-    const ground = new THREE.MeshStandardMaterial({
-      map: gridTexture('#1a1a1a', '#3d2a52', TILE / 2),
-      roughness: 0.9,
-    })
-    for (let x = -SIZE / 2 + TILE / 2; x < SIZE / 2; x += TILE) {
-      for (let z = -SIZE / 2 + TILE / 2; z < SIZE / 2; z += TILE) {
-        world.addBox({
-          size: [TILE, 1, TILE],
-          position: [x, -0.5, z],
-          material: ground,
-          collide: false,
-        })
-      }
-    }
-    const reach = SIZE / 2 + 12
-    world.addCollider([-reach, -1, -reach], [reach, 0, reach])
+    const reach = CIRCUMFERENCE / 2
+    const ground = new THREE.Mesh(
+      groundDisk(reach, 120, 128),
+      new THREE.MeshStandardMaterial({
+        map: gridTexture('#1a1a1a', '#3d2a52', 1),
+        roughness: 0.9,
+      }),
+    )
+    ground.frustumCulled = false
+    world.scene.add(ground)
+    // On the map the ground is a flat slab under the whole disk.
+    world.addCollider([-reach - 12, -1, -reach - 12], [reach + 12, 0, reach + 12])
 
     // Landmarks: without fixed reference points you cannot tell that space
     // has been stitched together wrongly.
