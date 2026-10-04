@@ -26,4 +26,6 @@ export function preloadAssets() {
   preloadFoliage()
   const images = new THREE.ImageLoader()
   for (const file of GROUND) images.load(`${import.meta.env.BASE_URL}textures/${file}`)
+  // The rain is fetched by the sound when it starts; this puts it in the browser's cache.
+  void fetch(`${import.meta.env.BASE_URL}sounds/rain.mp3`).catch(() => {})
 }

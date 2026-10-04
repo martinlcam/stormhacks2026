@@ -1,54 +1,38 @@
 import { describe, expect, it } from 'bun:test'
-import { rainDrops } from '../src/game/sound'
+import { seamless } from '../src/game/sound'
 
-const RATE = 8000
+const RATE = 1000
 
-/* A repeatable stream of numbers from 0 to 1. */
-function seeded() {
-  let state = 12345
-  return () => {
-    state = (Math.imul(state, 1664525) + 1013904223) >>> 0
-    return state / 4294967296
-  }
-}
+describe('Feature: the rain plays round and round without a join', () => {
+  // A recording that drifts steadily upwards, so its end is nothing like its beginning.
+  const recording = Float32Array.from({ length: 10 * RATE }, (_, i) => i / (10 * RATE))
+  const loop = seamless(recording, RATE, 2)
 
-const loudness = (samples: Float32Array) =>
-  Math.sqrt(samples.reduce((sum, s) => sum + s * s, 0) / samples.length)
-
-describe('Feature: the rain sounds like rain', () => {
-  const rain = rainDrops(RATE, 4, seeded())
-
-  describe('Scenario: rain is made of drops', () => {
-    it('Given the sound of rain, then it is spiky: its loudest moments stand far above its usual level', () => {
-      const peak = rain.reduce((most, s) => Math.max(most, Math.abs(s)), 0)
-
-      // For steady hiss this is under 2. Separate drops make it several times that.
-      expect(peak / loudness(rain)).toBeGreaterThan(5)
+  describe('Scenario: joining the end of a recording to its beginning', () => {
+    it('Given a recording, then the loop is shorter by the part that is faded over', () => {
+      expect(loop.length).toBe(8 * RATE)
     })
 
-    it('Then it is uneven from moment to moment, as drops come and go', () => {
-      // How loud each fiftieth of a second is.
-      const window = RATE / 50
-      const levels: number[] = []
-      for (let i = 0; i + window <= rain.length; i += window) {
-        levels.push(loudness(rain.subarray(i, i + window)))
-      }
-      const mean = levels.reduce((a, b) => a + b, 0) / levels.length
-      const spread = Math.sqrt(levels.reduce((a, l) => a + (l - mean) ** 2, 0) / levels.length)
+    it('Then where the loop ends is where it begins: no jump when it comes round', () => {
+      const step = Math.abs(recording[1] - recording[0])
+      const join = Math.abs(loop[0] - loop[loop.length - 1])
 
-      // For steady hiss this is about 0.05.
-      expect(spread / mean).toBeGreaterThan(0.3)
+      // The recording itself would jump by almost 1 from its end to its start.
+      expect(join).toBeLessThan(step * 20)
     })
 
-    it('Then there is never a silence: some drop is always falling', () => {
-      const window = RATE / 10
-      for (let i = 0; i + window <= rain.length; i += window) {
-        expect(loudness(rain.subarray(i, i + window))).toBeGreaterThan(0.002)
-      }
+    it('Then the middle of the recording is left as it was', () => {
+      expect(loop[5 * RATE]).toBe(recording[5 * RATE])
     })
 
-    it('Then it never gets loud enough to distort', () => {
-      expect(rain.every((s) => Math.abs(s) < 1)).toBe(true)
+    it('Given a silence at each end of the file, when it is trimmed, then the silence is not in the loop', () => {
+      const padded = new Float32Array(10 * RATE).fill(0.5)
+      padded.fill(0, 0, 200)
+      padded.fill(0, padded.length - 200)
+
+      const trimmed = seamless(padded, RATE, 2, 0.2)
+
+      expect(trimmed.every((sample) => sample > 0.4)).toBe(true)
     })
   })
 })

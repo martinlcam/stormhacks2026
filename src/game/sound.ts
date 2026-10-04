@@ -5,58 +5,41 @@ const STRIDE = 2.1
 /* The low note under each sky, in hertz. Every door moves to the next. */
 const ROOTS = [55, 49, 61.7, 65.4, 73.4, 46.2]
 
-/* How long the rain is before it comes round again. */
-const RAIN_SECONDS = 8
-/* Small drops, and heavy drips into standing water, in each second of rain. */
-const DROPS = 380
-const DRIPS = 5
+/* The rain recording. */
+export const RAIN_FILE = `${import.meta.env.BASE_URL}sounds/rain.mp3`
+/* Seconds of the rain recording that its end is faded into its beginning over. */
+const RAIN_BLEND = 2
+/* Seconds cut from each end of the recording, where the file format leaves a short silence. */
+const RAIN_TRIM = 0.2
 
 /*
-  The sound of rain falling, as samples from -1 to 1 that can be played
-  round and round without a join. It is built one drop at a time.
-
-  A small drop is a tick: a few thousandths of a second of a high note and
-  noise, dying away at once. Most are faint and a few are loud, as drops
-  near the ear are. A drip into a puddle is rarer, longer and lower, and
-  its note rises as it dies, which is what makes it sound like water.
+  Make a recording that can be played round and round without a join. Its
+  last `blend` seconds are faded out over its first `blend` seconds as they
+  fade in, and the result is shorter by that much: where it ends is exactly
+  where it began.
 */
-export function rainDrops(
+export function seamless(
+  samples: Float32Array,
   rate: number,
-  seconds: number,
-  random: () => number = Math.random,
+  blend: number,
+  trim = 0,
 ): Float32Array<ArrayBuffer> {
-  const samples = new Float32Array(Math.floor(rate * seconds))
-  const add = (start: number, length: number, at: (t: number) => number) => {
-    for (let k = 0; k < length; k++) {
-      // A drop that runs off the end carries on at the beginning.
-      samples[(start + k) % samples.length] += at(k / rate)
-    }
+  const cut = Math.floor(trim * rate)
+  const body = samples.subarray(cut, samples.length - cut)
+  const overlap = Math.min(Math.floor(blend * rate), Math.floor(body.length / 2))
+  const loop = new Float32Array(body.length - overlap)
+  loop.set(body.subarray(0, loop.length))
+  for (let i = 0; i < overlap; i++) {
+    // Equal power, so the rain is no quieter in the middle of the fade.
+    const t = (i / overlap) * (Math.PI / 2)
+    loop[i] = body[i] * Math.sin(t) + body[loop.length + i] * Math.cos(t)
   }
-  for (let i = 0; i < DROPS * seconds; i++) {
-    const pitch = 1800 + random() ** 2 * 7000
-    const fade = 0.0015 + random() * 0.005
-    const loud = 0.015 + random() ** 4 * 0.4
-    add(Math.floor(random() * samples.length), Math.ceil(fade * 6 * rate), (t) => {
-      const tick = Math.sin(2 * Math.PI * pitch * t) * 0.6 + (random() * 2 - 1) * 0.4
-      return loud * Math.exp(-t / fade) * tick
-    })
-  }
-  for (let i = 0; i < DRIPS * seconds; i++) {
-    const pitch = 700 + random() * 1100
-    const length = 0.03 + random() * 0.05
-    const loud = 0.12 + random() * 0.25
-    add(Math.floor(random() * samples.length), Math.ceil(length * rate), (t) => {
-      // The note climbs by half as much again while it lasts.
-      const turns = pitch * (t + (0.25 * t * t) / length)
-      return loud * Math.exp((-4 * t) / length) * Math.sin(2 * Math.PI * turns)
-    })
-  }
-  return samples
+  return loop
 }
 
 /*
-  Every sound in the game, made here from oscillators and noise; there are
-  no sound files. Nothing plays until `start`, which must follow a click,
+  Every sound in the game. All but the rain are made here from oscillators
+  and noise. Nothing plays until `start`, which must follow a click,
   because a browser will not make sound before one.
 */
 export class Sound {
@@ -103,55 +86,33 @@ export class Sound {
       return voice
     })
 
-    // Rain that never stops. What makes rain sound like rain and not like
-    // hiss is that it is made of separate drops, so most of it is drops:
-    // eight seconds of them, different in each ear, played round and round.
-    // It takes a moment to make, so it is made just after the click that
-    // starts the sound and not during it.
+    // Rain that never stops: a recording of rain against a window ("Rain
+    // against the window" by cori, Wikimedia Commons, public domain),
+    // joined end to beginning and played round and round.
     const master = this.master
-    setTimeout(() => {
-      if (this.context !== context) return
-      const drops = rainDrops(context.sampleRate, RAIN_SECONDS)
-      const rain = context.createBuffer(2, drops.length, context.sampleRate)
-      rain.copyToChannel(drops, 0)
-      // The other ear hears the same rain from a different moment, which
-      // is as good as different rain and takes half as long to make.
-      const later = Math.floor(drops.length * 0.47)
-      const other = new Float32Array(drops.length)
-      other.set(drops.subarray(later))
-      other.set(drops.subarray(0, later), drops.length - later)
-      rain.copyToChannel(other, 1)
-      const falling = context.createBufferSource()
-      falling.buffer = rain
-      falling.loop = true
-      const lift = context.createBiquadFilter()
-      lift.type = 'highpass'
-      lift.frequency.value = 500
-      const wet = context.createGain()
-      wet.gain.value = 0.55
-      falling.connect(lift).connect(wet).connect(master)
-      falling.start()
-    }, 0)
-
-    // Under the drops, the far-off wash of all the rain too distant to
-    // hear as drops. It is kept quiet, and it swells and sinks like gusts.
-    const wash = context.createBufferSource()
-    wash.buffer = this.noise
-    wash.loop = true
-    const band = context.createBiquadFilter()
-    band.type = 'bandpass'
-    band.frequency.value = 2400
-    band.Q.value = 0.6
-    const far = context.createGain()
-    far.gain.value = 0.035
-    const gust = context.createOscillator()
-    gust.frequency.value = 0.11
-    const sway = context.createGain()
-    sway.gain.value = 0.015
-    gust.connect(sway).connect(far.gain)
-    gust.start()
-    wash.connect(band).connect(far).connect(this.master)
-    wash.start()
+    void fetch(RAIN_FILE)
+      .then((response) => response.arrayBuffer())
+      .then((file) => context.decodeAudioData(file))
+      .then((recording) => {
+        if (this.context !== context) return
+        const loop = seamless(
+          recording.getChannelData(0),
+          recording.sampleRate,
+          RAIN_BLEND,
+          RAIN_TRIM,
+        )
+        const rain = context.createBuffer(1, loop.length, recording.sampleRate)
+        rain.copyToChannel(loop, 0)
+        const falling = context.createBufferSource()
+        falling.buffer = rain
+        falling.loop = true
+        const wet = context.createGain()
+        wet.gain.value = 0.7
+        falling.connect(wet).connect(master)
+        falling.start()
+      })
+      // No rain is better than no game.
+      .catch(() => {})
   }
 
   /* M: turn all sound off or back on. */
