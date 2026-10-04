@@ -4,7 +4,9 @@ import type { Engine } from '../engine/Engine'
 import {
   elsewhere,
   keepNearestSite,
+  onPlanet,
   placedFrom,
+  planetRadius,
   rechart,
   redirect,
   seenFrom,
@@ -25,7 +27,7 @@ const HOLD_RIGHT = 0.34
 const HOLD_BELOW = 0.3
 /* Throw speed for the lightest tap and for a full charge, per unit of scale. */
 const THROW_MIN = 3
-const THROW_MAX = 18
+const THROW_MAX = 21
 /* Seconds of holding Q to reach a full charge. */
 const CHARGE_TIME = 1.2
 /*
@@ -95,6 +97,8 @@ export interface ItemEvents {
   charge(level: number | null): void
   /* A loose item went through a portal by itself. */
   thrownThrough(): void
+  /* A loose item went all the way round the planet without stopping. */
+  wentRound?(): void
   /* An item was picked up. */
   pickedUp?(): void
   /* The held item was let go; `level` is the throw's charge, or null if it was put down. */
@@ -200,6 +204,8 @@ export class ItemSystem {
   private playerScale = 1
   private readonly abort = new AbortController()
   private readonly crossings: PortalItemView[] = []
+  /* Metres each loose item has gone over the planet since it was last still, held or through a door. */
+  private readonly flown = new Map<Item, number>()
 
   constructor(
     private readonly engine: Pick<Engine, 'world' | 'player'>,
@@ -209,7 +215,10 @@ export class ItemSystem {
     if (startingItem) this.pickUp(startingItem)
 
     for (const item of engine.world.items) {
-      item.body.onTraverse = () => events.thrownThrough()
+      item.body.onTraverse = () => {
+        this.flown.delete(item)
+        events.thrownThrough()
+      }
       item.mesh.userData.shadowCaster = true
       if (
         !item.mesh.userData.portalItemView &&
@@ -266,7 +275,25 @@ export class ItemSystem {
     }
   }
 
+  /*
+    Count how far a loose item has gone over the planet. Nothing turns it, so
+    once that is the whole way round, it is back where it was let go.
+  */
+  private lap(item: Item, dt: number) {
+    const { body } = item
+    const round = this.engine.world.planetSize
+    if (!round || body.resting || !onPlanet(body.position)) {
+      this.flown.delete(item)
+      return
+    }
+    const before = this.flown.get(item) ?? 0
+    const after = before + Math.hypot(body.velocity.x, body.velocity.z) * dt
+    this.flown.set(item, after)
+    if (before < round && after >= round) this.events.wentRound?.()
+  }
+
   private pickUp(item: Item) {
+    this.flown.delete(item)
     this.held = item
     item.body.resting = true
     item.body.velocity.set(0, 0, 0)
@@ -312,6 +339,7 @@ export class ItemSystem {
       if (!body.resting) {
         body.step(dt, world.colliders, world.portals)
         keepNearestSite(body, world.sites)
+        this.lap(item, dt)
         // Roll: turn about the axis at right angles to the direction of travel.
         spin.crossVectors(body.up, body.velocity)
         const along = spin.length()
@@ -473,8 +501,12 @@ export class ItemSystem {
       distance =
         distance === Infinity ? TARGET_OPEN : Math.max(TARGET_NEAR, Math.min(TARGET_FAR, distance))
       mark.copy(eye).addScaledVector(look, distance * player.scale)
-      // Gravity on an item goes with its size; see Body.
-      throwVelocity(hand, mark, speed * player.scale, GRAVITY * body.scale, launch, player.up)
+      // Gravity on an item goes with its size; see Body. On the planet a fast
+      // throw falls less, by its speed squared over the planet's radius.
+      const fast = speed * player.scale
+      const lift = onPlanet(player.position) ? (fast * fast) / (planetRadius() + hand.y) : 0
+      const pull = Math.max(GRAVITY * body.scale - lift, 0.5)
+      throwVelocity(hand, mark, fast, pull, launch, player.up)
       body.velocity.add(launch)
     }
     // The velocity was worked out where the player stands, not where the item is.

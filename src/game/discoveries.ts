@@ -156,6 +156,13 @@ export const discoveries = {
     maths:
       'A circle drawn on the floor cannot be left without crossing it, but a ring in a room can be stepped over: one more direction is always enough to go round. In four dimensions no two rings stay linked and no knot in a string holds, because there is always a way past that touches nothing.',
   },
+  'round-the-world': {
+    id: 'round-the-world',
+    title: 'Thrown round the world',
+    body: 'You threw it away from you as hard as you could, and it came back from behind.',
+    maths:
+      'The planet is 140 metres round, small enough that its ground curves away about as fast as a hard throw falls. At 19 metres a second a gem falls all the way round without landing, which is an orbit. And since a straight line here is a circle, nothing can get further from you than the far side of the world, 70 metres away: after that it is on its way back.',
+  },
 } satisfies Record<string, Discovery>
 
 export type DiscoveryId = keyof typeof discoveries

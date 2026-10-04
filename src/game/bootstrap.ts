@@ -196,6 +196,9 @@ export function bootstrap(
       thrownThrough: () => {
         if (!lightingScene) game.discover('thrown-through')
       },
+      wentRound: () => {
+        if (!lightingScene) game.discover('round-the-world')
+      },
       pickedUp: () => {
         sound.pickUp()
         // The lamp the player starts holding does not count, only what they pick up themselves.

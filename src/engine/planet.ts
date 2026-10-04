@@ -118,6 +118,11 @@ export function configurePlanet(circumference: number | null) {
   for (const site of everySite) site.settle()
 }
 
+/* The planet's radius in metres, or 0 when the world is flat. */
+export function planetRadius(): number {
+  return planet.k > 0 ? 1 / planet.k : 0
+}
+
 /* The site at the pole, where the map and the planet agree with no turning. */
 export const POLE = new Site('pole')
 

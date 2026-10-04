@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { axisOf, upVector } from './gravity'
-import { elsewhere, onPlanet, POLE, type Site, walkOnPlanet } from './planet'
+import { elsewhere, onPlanet, planetRadius, POLE, type Site, walkOnPlanet } from './planet'
 import type { Portal } from './Portal'
 import { yawDelta } from './portalMath'
 import { sweepSphereBox } from './sweep'
@@ -16,6 +16,8 @@ const DEAD_SPEED = 1
 const ROLL_DRAG = 2.5
 /* A grounded ball slower than this (per unit of scale) comes to rest. */
 const REST_SPEED = 0.15
+/* Share of its speed over the ground that a ball in the air above the planet loses a second. */
+const AIR = 0.01
 const MAX_SUBSTEPS = 24
 
 const before = new THREE.Vector3()
@@ -34,6 +36,13 @@ const contactNormal = new THREE.Vector3()
   world's axis-aligned boxes, on the planet its horizontal motion follows a
   great circle, and crossing a portal applies that portal's transform to its
   position, velocity and size together.
+
+  On the planet its velocity along the ground (x and z) is the speed of the
+  point under it, and its height is worked out as on any small world: the
+  ground curves away beneath a ball going sideways, so the faster it goes
+  the less it falls. A ball going fast enough does not come down at all. It
+  falls all the way round, which is an orbit. A little air slows it, so
+  that in the end it lands.
 */
 export class Body {
   /* Centre of the ball. */
@@ -82,6 +91,15 @@ export class Body {
     // Where there is no bottom to reach, a fall must still stop getting faster.
     const falling = -this.velocity.dot(this.up) - TERMINAL_SPEED * this.scale
     if (falling > 0) this.velocity.addScaledVector(this.up, falling)
+    if (onPlanet(this.position)) {
+      // Going round a circle of radius r at speed v takes an inward pull of
+      // v² / r. That much of gravity is spent keeping the ball going round
+      // and does not bring it down. The ball is at R + height and going
+      // (R + height) / R times as fast as the ground under it.
+      const radius = planetRadius()
+      const ground = this.velocity.x ** 2 + this.velocity.z ** 2
+      this.velocity.y += ((ground * (radius + this.position.y)) / (radius * radius)) * dt
+    }
 
     // Prefer steps no longer than half a radius; sweep longer steps if capped.
     const distance = this.velocity.length() * dt
@@ -93,7 +111,14 @@ export class Body {
     before.copy(this.position)
     if (onPlanet(this.position)) {
       walkOnPlanet(this, dt)
+      const radius = planetRadius()
+      const from = radius + this.position.y
       this.position.y += this.velocity.y * dt
+      // A ball that rises goes round more slowly and one that sinks more
+      // quickly, as a skater does who puts out or pulls in their arms.
+      const swing = (from / (radius + this.position.y)) ** 2 * Math.exp(-AIR * dt)
+      this.velocity.x *= swing
+      this.velocity.z *= swing
     } else {
       this.position.addScaledVector(this.velocity, dt)
     }
