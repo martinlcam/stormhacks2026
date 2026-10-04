@@ -10,7 +10,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
     wood     "Rough Wood" texture, Poly Haven, CC0 (Rob Tuytel)
     ferns    "Fern 02" model, Poly Haven, CC0 (Rob Tuytel, Rico Cilliers)
     sorrel   "Shrub Sorrel 01" model, Poly Haven, CC0 (Rico Cilliers)
-    stone    "Castle Wall Slates" texture, Poly Haven, CC0 (Rob Tuytel)
+    planks   "Old Planks 02" texture, Poly Haven, CC0 (Rob Tuytel)
     ivy      photographed leaves from "Leaf Set 017", ambientCG, CC0, set
              on stems that are grown here: up the posts, along the top and
              hanging down into the opening
@@ -33,34 +33,35 @@ export function woodMaterial(): THREE.MeshStandardMaterial {
     if (colour) texture.colorSpace = THREE.SRGBColorSpace
     return texture
   }
-  wood = new THREE.MeshStandardMaterial({
-    map: load('diffuse.jpg', true),
-    normalMap: load('normal.jpg', false),
-    roughness: 0.95,
-  })
+  wood = new THREE.MeshStandardMaterial({ color: 0x8a7458, roughness: 0.95 })
+  if (canLoadImages()) {
+    wood.color.set(0xffffff)
+    wood.map = load('diffuse.jpg', true)
+    wood.normalMap = load('normal.jpg', false)
+  }
   return wood
 }
 
-let stone: THREE.MeshStandardMaterial | undefined
+let planks: THREE.MeshStandardMaterial | undefined
 
-/* An old wall of stacked slate. One copy of the texture covers 2.5 m. */
-export const STONE_TILE = 2.5
-export function stoneMaterial(): THREE.MeshStandardMaterial {
-  if (stone) return stone
-  stone = new THREE.MeshStandardMaterial({ color: 0x9a9088, roughness: 0.95 })
+/* A wall of old upright boards. One copy of the texture covers 2 m. */
+export const PLANK_TILE = 2
+export function plankMaterial(): THREE.MeshStandardMaterial {
+  if (planks) return planks
+  planks = new THREE.MeshStandardMaterial({ color: 0x6b5a4a, roughness: 0.95 })
   if (canLoadImages()) {
     const load = (file: string, colour: boolean) => {
-      const texture = new THREE.TextureLoader().load(assets(`textures/castle_wall_slates/${file}`))
+      const texture = new THREE.TextureLoader().load(assets(`textures/old_planks_02/${file}`))
       texture.wrapS = texture.wrapT = THREE.RepeatWrapping
       texture.anisotropy = 8
       if (colour) texture.colorSpace = THREE.SRGBColorSpace
       return texture
     }
-    stone.color.set(0xffffff)
-    stone.map = load('diffuse.jpg', true)
-    stone.normalMap = load('normal.jpg', false)
+    planks.color.set(0xffffff)
+    planks.map = load('diffuse.jpg', true)
+    planks.normalMap = load('normal.jpg', false)
   }
-  return stone
+  return planks
 }
 
 const loader = new GLTFLoader()
@@ -87,7 +88,7 @@ function plants(name: string): Promise<THREE.Object3D[]> {
 /* Start loading everything in this file that comes from a file. The results are kept. */
 export function preloadFoliage() {
   woodMaterial()
-  stoneMaterial()
+  plankMaterial()
   ivyLeafMaterial()
   void plants('fern_02')
   void plants('shrub_sorrel_01')
@@ -494,6 +495,7 @@ function undergrowth(group: THREE.Group, { name, width, post }: Doorway) {
     ])
     .map((spot) => ({ ...spot, pick: random(), turn: between(0, Math.PI * 2) }))
 
+  if (!canLoadImages()) return
   for (const spot of spots) {
     void plants(spot.model).then((versions) => {
       const plant = versions[Math.floor(spot.pick * versions.length)].clone()

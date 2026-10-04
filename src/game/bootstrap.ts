@@ -9,6 +9,7 @@ import { hub } from '../world/structures/hub'
 import { loopCorridor } from '../world/structures/loopCorridor'
 import { resizingDoors } from '../world/structures/resizingDoors'
 import { sculpture } from '../world/structures/sculpture'
+import { stairwell } from '../world/structures/stairwell'
 import { Avatar } from './avatar'
 import { ItemSystem } from './items'
 import type { LightingScene, LightingView } from './lightingScenes'
@@ -47,6 +48,7 @@ export function bootstrap(
         () => game.discover('small-world'),
       ),
       sculpture(() => game.discover('hypercube')),
+      stairwell(() => game.discover('endless-stairwell')),
     ]
 
     for (const structure of structures) world.build(structure)

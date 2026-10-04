@@ -119,7 +119,7 @@ export class PortalRenderer {
     this.portalLighting?.update()
     this.collectMaterials(scene)
     this.renderer.clear(true, true, true)
-    this.renderLevel(scene, camera, 0, null, up, this.maxPasses)
+    this.renderLevel(scene, camera, 0, null, up, this.maxPasses, 0)
   }
 
   private renderLevel(
@@ -130,6 +130,8 @@ export class PortalRenderer {
     up: THREE.Vector3,
     /* How many times this view and everything seen through it may draw the world. */
     allowance: number,
+    /* How many doors this view looks through. Seams are not doors. */
+    doors: number,
   ) {
     const clip = exit ? exit.spacePlane : NO_CLIP
     const visible = this.findVisible(camera, level, exit)
@@ -168,7 +170,15 @@ export class PortalRenderer {
         virtual.updateMatrixWorld(true)
         const virtualUp = (this.ups[level] ??= new THREE.Vector3())
         virtualUp.copy(up).transformDirection(portal.view)
-        this.renderLevel(scene, virtual, level + 1, portal.target, virtualUp, childAllowance)
+        this.renderLevel(
+          scene,
+          virtual,
+          level + 1,
+          portal.target,
+          virtualUp,
+          childAllowance,
+          doors + (portal.seamless ? 0 : 1),
+        )
 
         // 3. unmark
         this.clipPlane.copy(clip)
@@ -188,7 +198,7 @@ export class PortalRenderer {
     for (const material of this.worldMaterials) material.stencilRef = level
     planetUniforms.uSkyUp.value.copy(up)
     this.portalLighting?.prepareCamera(camera)
-    this.beforePass?.(level)
+    this.beforePass?.(doors)
     this.renderer.render(scene, camera)
     this.passes++
 

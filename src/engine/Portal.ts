@@ -46,6 +46,13 @@ export interface PortalOptions {
   scale?: number
   /* The site whose map `position` is on. Defaults to the pole. */
   site?: Site
+  /*
+    A seam, not a door: a cut through open space that is joined to another
+    cut, with the same things on both sides of it. Nothing behind it is
+    treated as a wall, and going through it does not count as going through
+    a door.
+  */
+  seamless?: boolean
 }
 
 const corner = new THREE.Vector3()
@@ -60,6 +67,7 @@ export class Portal {
   readonly height: number
   readonly scale: number
   readonly site: Site
+  readonly seamless: boolean
   /* Stencil/depth surface. Never added to the world scene. */
   readonly mesh: THREE.Mesh
   /* World plane of the opening, normal pointing out of the front. */
@@ -101,6 +109,7 @@ export class Portal {
     this.height = options.height
     this.scale = options.scale ?? 1
     this.site = options.site ?? POLE
+    this.seamless = options.seamless ?? false
     this.radius = (Math.hypot(options.width, options.height) / 2 + PORTAL_THICKNESS) * this.scale
 
     const geometry = new THREE.BoxGeometry(options.width, options.height, PORTAL_THICKNESS)
@@ -177,6 +186,7 @@ export class Portal {
   /* Work out which colliders are the wall behind this opening. */
   computeGhostColliders(colliders: readonly THREE.Box3[]) {
     this.ghostColliders.clear()
+    if (this.seamless) return
     for (const box of colliders) {
       if (elsewhere(box, this.site)) continue
       let minX = Infinity

@@ -5,8 +5,8 @@ import { assign, POLE, type Site } from '../engine/planet'
 import { Portal } from '../engine/Portal'
 import {
   overgrowth,
-  STONE_TILE,
-  stoneMaterial,
+  PLANK_TILE,
+  plankMaterial,
   wallGrowth,
   WOOD_TILE,
   woodMaterial,
@@ -53,7 +53,7 @@ export interface BoxOptions {
   size: Vec3
   /* Centre of the box. */
   position: Vec3
-  /* Not needed for an overgrown box, which is stone. */
+  /* Not needed for an overgrown box, which is planks. */
   material?: THREE.Material
   /* Solid to the player. Defaults to true. */
   collide?: boolean
@@ -62,8 +62,10 @@ export interface BoxOptions {
     along the box's length, instead of stretching one copy over each face.
   */
   tile?: number
+  /* With `tile`: keep the image upright on every side, as for masonry, whatever the box's shape. */
+  upright?: boolean
   /*
-    An old stone wall with ivy climbing it and plants at its foot. Takes the
+    An old plank wall with ivy climbing it and plants at its foot. Takes the
     place of `material`. For upright boxes that stand on the ground.
   */
   overgrown?: boolean
@@ -167,15 +169,23 @@ export class World {
     this.colliders.push(box)
   }
 
-  addBox({ size, position, collide = true, tile, overgrown, ...rest }: BoxOptions): THREE.Mesh {
-    const material = overgrown ? stoneMaterial() : rest.material
+  addBox({
+    size,
+    position,
+    collide = true,
+    tile,
+    upright,
+    overgrown,
+    ...rest
+  }: BoxOptions): THREE.Mesh {
+    const material = overgrown ? plankMaterial() : rest.material
     if (!material) throw new Error('A box needs a material')
     // Bending moves vertices, so long faces need enough of them to curve.
     // Vertical edges stay straight when bent and need no extra vertices.
     const segments = (length: number) => Math.max(1, Math.ceil(length / SEGMENT))
     const geometry = new THREE.BoxGeometry(...size, segments(size[0]), 1, segments(size[2]))
-    if (overgrown) tileBox(geometry, size, STONE_TILE, false)
-    else if (tile) tileBox(geometry, size, tile)
+    if (overgrown) tileBox(geometry, size, PLANK_TILE, false)
+    else if (tile) tileBox(geometry, size, tile, !upright)
     const mesh = new THREE.Mesh(geometry, material)
     mesh.position.set(...position)
     // The stored bounds are not where a bent mesh is drawn.
@@ -264,7 +274,7 @@ export class World {
         [0, (height + post) / 2, -0.3],
         options.backing,
       )
-      // An old door that stands on the ground is set in old stone, with ivy round the back.
+      // An old door that stands on the ground is set in old boards, with ivy round the back.
       if (overgrown && up === 'y+') {
         this.scene.remove(slab)
         const { width: w, height: h, depth: d } = (slab.geometry as THREE.BoxGeometry).parameters
@@ -295,6 +305,45 @@ export class World {
       assign(growth, this.site)
       this.scene.add(growth)
     }
+    this.portals.push(portal)
+    return portal
+  }
+
+  /*
+    A timber roof over walls whose tops are at `top`: three slabs, each
+    smaller than the one under it, the lowest overhanging the walls.
+  */
+  addRoof(centre: readonly [number, number], top: number, width: number, depth: number) {
+    const thick = 0.16
+    for (const [layer, share] of [1.25, 0.85, 0.45].entries()) {
+      this.addBox({
+        size: [width * share, thick, depth * share],
+        position: [centre[0], top + thick * (layer + 0.5), centre[1]],
+        material: woodMaterial(),
+        tile: WOOD_TILE,
+      })
+    }
+  }
+
+  /*
+    A bare opening with no frame round it, such as a seam across a shaft.
+    `position`, `facing` and `up` are as for a door.
+  */
+  addPortal(options: {
+    name: string
+    position: Vec3
+    facing: 0 | 1 | 2 | 3
+    up?: Axis
+    width: number
+    height: number
+    seamless?: boolean
+  }): Portal {
+    const portal = new Portal({
+      ...options,
+      position: new THREE.Vector3(...options.position),
+      yaw: (options.facing * Math.PI) / 2,
+      site: this.site,
+    })
     this.portals.push(portal)
     return portal
   }

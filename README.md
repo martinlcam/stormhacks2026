@@ -84,7 +84,6 @@ in `src/world/lightingLab.ts`. Check changes with `bun test`, `bun run lint` and
 - Add a generator that makes hyperbolic rooms when the player comes near.
 - Add stairs and more surfaces to the gravity room.
 - Build the tesseract house: eight cube rooms connected as the cells of a hypercube.
-- Build the endless stairwell.
 - Build the pillar that the player must go around two times.
 - Add the gyroscope arrow that shows the rotation after a loop.
 - Add the chalk line that draws straight paths and shows the angle sum of a triangle.

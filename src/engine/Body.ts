@@ -5,6 +5,8 @@ import type { Portal } from './Portal'
 import { yawDelta } from './portalMath'
 
 export const GRAVITY = 16
+/* The fastest a fall gets, in metres per second. */
+const TERMINAL_SPEED = 30
 /* Share of the speed into a surface that comes back out of it. */
 const BOUNCE = 0.45
 /* Hits slower than this (per unit of scale) do not bounce at all. */
@@ -75,6 +77,9 @@ export class Body {
     // Gravity scales with the ball, as it does for the player, so a ball
     // shrunk by a doorway moves the way a full-size ball does to full-size eyes.
     this.velocity.addScaledVector(this.up, -GRAVITY * this.scale * dt)
+    // Where there is no bottom to reach, a fall must still stop getting faster.
+    const falling = -this.velocity.dot(this.up) - TERMINAL_SPEED * this.scale
+    if (falling > 0) this.velocity.addScaledVector(this.up, falling)
 
     // Never move more than half a radius at once, or thin walls are skipped.
     const distance = this.velocity.length() * dt

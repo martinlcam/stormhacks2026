@@ -1,5 +1,5 @@
 import { Site } from '../../engine/planet'
-import { STONE_TILE, stoneMaterial } from '../foliage'
+import { PLANK_TILE, plankMaterial } from '../foliage'
 import type { Structure } from '../World'
 import { glow, matte, palette } from '../materials'
 
@@ -76,9 +76,10 @@ export function resizingDoors(onResize: () => void, onEnterVault: () => void): S
       world.addBox({
         size: [3.4, 0.2, 3.4],
         position: [vx, height + 0.1, vz],
-        material: stoneMaterial(),
-        tile: STONE_TILE,
+        material: plankMaterial(),
+        tile: PLANK_TILE,
       })
+      world.addRoof([vx, vz], height + 0.2, 3.4, 3.4)
 
       // A lit rim, so the gap reads as a way in.
       const rim = glow(palette.cyan)

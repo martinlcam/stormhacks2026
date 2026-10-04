@@ -58,6 +58,13 @@ export const discoveries = {
     maths:
       'Rotations compose: a quarter turn followed by a quarter turn about the same axis is a half turn. The doors are the generators and the places you can stand are the results.',
   },
+  'endless-stairwell': {
+    id: 'endless-stairwell',
+    title: 'Stairs that only go up',
+    body: 'You climbed a full turn of the stairs, every step higher than the last, and came back to the door you started from.',
+    maths:
+      'The top of the tower is joined to its bottom, so up is a circle here, as east is on a globe. Penrose drew such stairs by cheating with perspective. Here no step cheats: it is the space that closes up, not the staircase.',
+  },
   hypercube: {
     id: 'hypercube',
     title: 'The shadow of a hypercube',

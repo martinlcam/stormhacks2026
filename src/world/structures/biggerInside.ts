@@ -15,9 +15,11 @@ export function biggerInside(onEnter: () => void): Structure {
     build(world) {
       // The booth: a solid block with a door on its front face.
       world.addBox({ size: [2, 2.8, 2], position: [0, 1.4, -8.1], overgrown: true })
+      world.addRoof([0, -8.1], 2.8, 2, 2)
+      // A light on the top of the roof, so the booth can be found from far off.
       world.addBox({
-        size: [2.2, 0.15, 2.2],
-        position: [0, 2.875, -8.1],
+        size: [0.3, 0.3, 0.3],
+        position: [0, 3.43, -8.1],
         material: glow(palette.purple, 0.8),
         collide: false,
       })

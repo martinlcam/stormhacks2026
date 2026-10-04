@@ -11,6 +11,8 @@ const WALK_SPEED = 4.5
 const RUN_SPEED = 8
 const JUMP_SPEED = 5.2
 const GRAVITY = 16
+/* The fastest a fall gets, in metres per second. */
+const TERMINAL_SPEED = 30
 const MOUSE_SENSITIVITY = 0.0022
 const MAX_PITCH = Math.PI / 2 - 0.01
 /* Longest distance moved per collision step; keeps fast frames from tunnelling. */
@@ -140,6 +142,8 @@ export class PlayerController {
     this.velocity.x += (wish.x - this.velocity.x) * blend
     this.velocity.z += (wish.z - this.velocity.z) * blend
     this.velocity.y -= GRAVITY * this.scale * dt
+    // Where there is no bottom to reach, a fall must still stop getting faster.
+    this.velocity.y = Math.max(this.velocity.y, -TERMINAL_SPEED * this.scale)
     if (this.onGround && this.keys.has('Space')) this.velocity.y = JUMP_SPEED * this.scale
     this.velocity.applyMatrix4(frameFor(this.axis))
 
@@ -392,7 +396,7 @@ export class PlayerController {
       this.velocity.transformDirection(portal.transform).multiplyScalar(speed)
       // The door may turn the player onto a wall or the ceiling.
       this.site = portal.target.site
-      this.doors++
+      if (!portal.seamless) this.doors++
       const turned = reorient(this.axis, this.yaw, portal.transform)
       this.axis = turned.axis
       this.yaw = turned.yaw
