@@ -2,10 +2,13 @@ import { describe, expect, it } from 'bun:test'
 import { FLAGS, readFlag } from '../src/flags'
 import { walk } from '../src/landing/speedraw'
 import {
+  BLOOM_END,
+  BLOOM_START,
   FALL_FRAMES,
   IMPACT_Y,
   SPLASH_FRAMES,
   beats,
+  bloomAt,
   dropAt,
   splashAt,
 } from '../src/landing/timeline'
@@ -16,6 +19,28 @@ function steps(from: number, to: number, count = 200): number[] {
 }
 
 describe('Feature: the landing story follows the scroll', () => {
+  describe('Scenario: the title lights grow, join and fade', () => {
+    it('Given the top of the page, then the lights are small dots of full colour', () => {
+      expect(bloomAt(0)).toEqual({ scale: BLOOM_START, alpha: 1 })
+    })
+
+    it('Given the page scrolled down step by step, then the lights only ever grow', () => {
+      let last = 0
+      for (const p of steps(0, beats.spread[1])) {
+        const { scale } = bloomAt(p)
+        expect(scale).toBeGreaterThanOrEqual(last)
+        last = scale
+      }
+      expect(last).toBe(BLOOM_END)
+    })
+
+    it('Given the lights have covered the page, then their colour fades to white before the first drawing', () => {
+      expect(beats.spread[1]).toBeLessThanOrEqual(beats.titleFade[0])
+      expect(bloomAt(beats.titleFade[1]).alpha).toBe(0)
+      expect(beats.titleFade[1]).toBeLessThanOrEqual(beats.deskIn[0])
+    })
+  })
+
   describe('Scenario: the beats of the story', () => {
     it('Given every beat, then each starts before it ends and lies within the page', () => {
       for (const [name, [from, to]] of Object.entries(beats)) {

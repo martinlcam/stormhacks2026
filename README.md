@@ -8,8 +8,9 @@
 ## Landing page
 
 `/` opens the landing page: the story from the Figma file (WU), told by scrolling.
-The title washes away to white paper, two drawings come in with their captions
-and glowing gems, and a raindrop falls through them into blue water. Its splash
+The title's coloured lights grow from small dots, join as they meet and cover the
+page, then fade to white paper. Two drawings come in with their captions and
+glowing gems, and a raindrop falls through them into blue water. Its splash
 brings in the button to the game. Everything follows the scroll, so scrolling up
 plays it backwards. The code is in `src/landing/`, the images in `public/landing/`.
 

@@ -11,15 +11,13 @@ export const INK = '#434343'
 export const CAPTION_INK = '#584747'
 
 export const art = {
-  gradientGreen: `${dir}gradient-green.svg`,
-  gradientYellow: `${dir}gradient-yellow.svg`,
   /* Textures-2 1: the grain over every frame. */
   grain: `${dir}grain.jpg`,
   /* Textures-1 1: the blue texture that the water can be painted from. */
   water: `${dir}water.jpg`,
-  /* The six falling frames of the raindrop, each cut out round the drop. */
+  /* The six falling frames of the raindrop, each cut out round the drop, pencil on nothing. */
   drops: [0, 1, 2, 3, 4, 5].map((i) => `${dir}drop-${i}.png`),
-  /* The seven splash frames, all cut to the same box. */
+  /* The seven splash frames, all cut to the same box, pencil on nothing. */
   splashes: [6, 7, 8, 9, 10, 11, 12].map((i) => `${dir}splash-${i}.png`),
 }
 
@@ -75,7 +73,7 @@ export const CAPTION = { top: 1283, size: 64 } as const
 export const DROP_SPRITE = { w: 96, h: 140 } as const
 /* The box every splash frame was cut to. */
 export const SPLASH_RECT: Rect = { x: 816, y: 779, w: 920, h: 410 }
-/* Where the rings spread from: the middle of the splash. */
+/* Where the button comes in: the middle of the splash. */
 export const SPLASH_CENTRE = { x: 1170, y: 990 } as const
 /* The top of the blue water once it has risen. */
 export const WATER_LINE = 850
