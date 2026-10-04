@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test'
 import * as THREE from 'three'
-import { aimMiss, chargeLevel, throwSpeed } from '../src/game/items'
+import { GRAVITY } from '../src/engine/Body'
+import { aimMiss, chargeLevel, throwSpeed, throwVelocity } from '../src/game/items'
 import { FACING, FRAME, door, floor, gem, linked, simulate } from './support'
 
 describe('Feature: gems fall, bounce and roll', () => {
@@ -149,6 +150,61 @@ describe('Feature: picking up is forgiving', () => {
 
     it('Given a gem 5 m ahead, when I aim straight at it, then it is out of reach', () => {
       expect(aimMiss(eye, ahead, gemAt(0, -5), radius, reach)).toBe(Infinity)
+    })
+  })
+})
+
+describe('Feature: a throw goes where the crosshair is', () => {
+  // The gem is held to the right of and below the eye, not on the line of sight.
+  const eye = new THREE.Vector3(0, 1.62, 0)
+  const hand = new THREE.Vector3(0.34, 1.32, -0.85)
+
+  /* How close a gem thrown from the hand comes to a point, in metres. */
+  const closestApproach = (target: THREE.Vector3, speed: number) => {
+    const body = gem(hand.x, hand.y, hand.z, 0.18)
+    throwVelocity(hand, target, speed, GRAVITY, body.velocity)
+    let closest = Infinity
+    for (let i = 0; i < 240; i++) {
+      body.step(FRAME / 4, [], [])
+      closest = Math.min(closest, body.position.distanceTo(target))
+    }
+    return closest
+  }
+
+  describe('Scenario: a full-strength throw at something 10 m ahead', () => {
+    it('Given the crosshair is on a point 10 m straight ahead, when I throw at full charge, then the gem passes through that point and not to the right of it', () => {
+      const target = eye.clone().add(new THREE.Vector3(0, 0, -10))
+
+      expect(closestApproach(target, throwSpeed(1))).toBeLessThan(0.15)
+    })
+
+    it('Given the crosshair is on a point up and to the left, when I throw at full charge, then the gem still passes through it', () => {
+      const target = eye.clone().add(new THREE.Vector3(-4, 3, -8))
+
+      expect(closestApproach(target, throwSpeed(1))).toBeLessThan(0.15)
+    })
+  })
+
+  describe('Scenario: where the throw starts', () => {
+    it('Given the gem is held to my right, when I throw, then it starts moving left towards the line of sight', () => {
+      const target = eye.clone().add(new THREE.Vector3(0, 0, -10))
+
+      const velocity = throwVelocity(hand, target, throwSpeed(1), GRAVITY, new THREE.Vector3())
+
+      expect(velocity.x).toBeLessThan(0)
+      expect(velocity.z).toBeLessThan(0)
+    })
+  })
+
+  describe('Scenario: a light toss at something far away', () => {
+    it('Given the crosshair is on a point 25 m away, when I only tap Q, then the gem is lobbed gently and falls short', () => {
+      const target = eye.clone().add(new THREE.Vector3(0, 0, -25))
+      const speed = throwSpeed(0)
+
+      const velocity = throwVelocity(hand, target, speed, GRAVITY, new THREE.Vector3())
+
+      expect(velocity.y).toBeLessThan(speed * 0.5)
+      expect(closestApproach(target, speed)).toBeGreaterThan(5)
     })
   })
 })

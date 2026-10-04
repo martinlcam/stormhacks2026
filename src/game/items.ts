@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { GRAVITY } from '../engine/Body'
 import type { Engine } from '../engine/Engine'
 import { placedFrom, redirect, seenFrom } from '../engine/planet'
 import type { Portal } from '../engine/Portal'
@@ -18,8 +19,20 @@ const THROW_MIN = 3
 const THROW_MAX = 18
 /* Seconds of holding Q to reach a full charge. */
 const CHARGE_TIME = 1.2
-/* A throw leaves slightly above the line of sight. */
-const THROW_LIFT = 0.12
+/*
+  A throw is aimed from the hand at the point under the crosshair. That
+  point is taken no nearer and no further than this, and at this distance
+  when the crosshair is on nothing. All per unit of the player's scale.
+*/
+const TARGET_NEAR = 2
+const TARGET_FAR = 30
+const TARGET_OPEN = 12
+/*
+  A throw is tipped upwards to make up for the fall on the way to the
+  target, but by no more than this share of its speed. Strong throws reach
+  the crosshair; weak ones at far targets fall short.
+*/
+const MAX_LOB = 0.35
 /* The aim ray may pass through this many portals. */
 const MAX_HOPS = 3
 /*
@@ -37,6 +50,24 @@ export function chargeLevel(heldSeconds: number): number {
 /* How fast a throw leaves the hand for a charge level of 0 to 1. */
 export function throwSpeed(level: number): number {
   return THROW_MIN + (THROW_MAX - THROW_MIN) * level
+}
+
+/*
+  The velocity that sends something from the hand to a target point at
+  `speed`, tipped up to allow for gravity pulling it down on the way.
+*/
+export function throwVelocity(
+  hand: THREE.Vector3,
+  target: THREE.Vector3,
+  speed: number,
+  gravity: number,
+  out: THREE.Vector3,
+): THREE.Vector3 {
+  out.subVectors(target, hand)
+  const flight = out.length() / speed
+  out.normalize().multiplyScalar(speed)
+  out.y += Math.min(0.5 * gravity * flight, MAX_LOB * speed)
+  return out
 }
 
 export interface ItemEvents {
@@ -59,6 +90,9 @@ const localEnd = new THREE.Vector3()
 const offset = new THREE.Vector3()
 const toItem = new THREE.Vector3()
 const seen = new THREE.Vector3()
+const hand = new THREE.Vector3()
+const mark = new THREE.Vector3()
+const launch = new THREE.Vector3()
 const spin = new THREE.Vector3()
 const UP = new THREE.Vector3(0, 1, 0)
 
@@ -281,6 +315,7 @@ export class ItemSystem {
       hold.copy(eye).addScaledVector(direction, Math.max(HOLD_MIN * player.scale, free))
     }
 
+    hand.copy(hold)
     // `hold` is in the frame around the player; the body lives on the map.
     placedFrom(player.position, hold, hold)
     body.position.copy(hold)
@@ -302,8 +337,18 @@ export class ItemSystem {
     const { body } = this.held!
     body.velocity.copy(player.velocity)
     if (speed > 0) {
-      body.velocity.addScaledVector(look, speed * player.scale)
-      body.velocity.y += THROW_LIFT * speed * player.scale
+      // Aim from the hand, which is off to one side, at whatever the
+      // crosshair is on, so the throw goes where the player is looking.
+      let distance = Infinity
+      for (const box of this.engine.world.colliders) {
+        distance = Math.min(distance, rayBox(eye, look, box))
+      }
+      distance =
+        distance === Infinity ? TARGET_OPEN : Math.max(TARGET_NEAR, Math.min(TARGET_FAR, distance))
+      mark.copy(eye).addScaledVector(look, distance * player.scale)
+      // Gravity on an item goes with its size; see Body.
+      throwVelocity(hand, mark, speed * player.scale, GRAVITY * body.scale, launch)
+      body.velocity.add(launch)
     }
     // The velocity was worked out where the player stands, not where the item is.
     redirect(player.position, body.position, body.velocity)

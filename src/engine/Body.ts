@@ -3,7 +3,7 @@ import { onPlanet, walkOnPlanet } from './planet'
 import type { Portal } from './Portal'
 import { yawDelta } from './portalMath'
 
-const GRAVITY = 16
+export const GRAVITY = 16
 /* Share of the speed into a surface that comes back out of it. */
 const BOUNCE = 0.45
 /* Hits slower than this (per unit of scale) do not bounce at all. */
