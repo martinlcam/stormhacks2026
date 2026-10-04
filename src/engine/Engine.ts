@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import type { World } from '../world/World'
-import { configurePlanet, onPlanet, upAt } from './planet'
+import { configurePlanet, keepNearestSite, onPlanet, upAt } from './planet'
 import { PlayerController } from './PlayerController'
 import { PortalRenderer } from './PortalRenderer'
 
@@ -73,13 +73,16 @@ export class Engine {
     dt ??= Math.min(this.timer.getDelta(), 0.05)
     if (this.player.locked || !this.running) {
       this.player.update(dt, this.world.colliders, this.world.portals)
+      keepNearestSite(this.player, this.world.sites)
     }
-    this.world.checkTriggers(this.player.position)
+    this.world.checkTriggers(this.player.position, this.player.site)
     this.world.update(dt, this.timer.getElapsed())
     this.player.applyTo(this.camera)
     // On the planet up depends on where you stand; elsewhere on which
     // surface the player is walking on.
-    const up = onPlanet(this.player.position) ? upAt(this.player.position, this.up) : this.player.up
+    const up = onPlanet(this.player.position)
+      ? upAt(this.player.position, this.up).applyQuaternion(this.player.site.rotation)
+      : this.player.up
     this.portalRenderer.render(this.world.scene, this.camera, up)
 
     this.frames++

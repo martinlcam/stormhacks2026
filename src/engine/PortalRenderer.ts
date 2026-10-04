@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { planetMaterial, planetUniforms } from './planet'
+import { materialAt, planetMaterial, planetUniforms, POLE, type Site, siteOf } from './planet'
 import type { Portal } from './Portal'
 
 /*
@@ -82,6 +82,8 @@ export class PortalRenderer {
   private readonly eye = new THREE.Vector3()
   private readonly sphere = new THREE.Sphere()
   private readonly worldMaterials = new Set<THREE.Material>()
+  /* Meshes whose materials have been pointed at their site. */
+  private readonly sited = new WeakSet<THREE.Object3D>()
   private portals: readonly Portal[] = []
 
   constructor(private readonly renderer: THREE.WebGLRenderer) {
@@ -186,7 +188,14 @@ export class PortalRenderer {
 
   private drawPortals(portals: readonly Portal[], material: THREE.Material, camera: THREE.Camera) {
     for (const portal of portals) {
-      portal.mesh.material = material
+      // The stencil settings change between draws; the copy for a site must keep up.
+      const sited = materialAt(material, portal.site)
+      if (sited !== material) {
+        sited.stencilRef = material.stencilRef
+        sited.stencilFunc = material.stencilFunc
+        sited.stencilZPass = material.stencilZPass
+      }
+      portal.mesh.material = sited
       portal.mesh.visible = true
     }
     this.renderer.render(this.portalScene, camera)
@@ -216,6 +225,15 @@ export class PortalRenderer {
     return list
   }
 
+  /* The site of a mesh: its own, or that of the nearest group above it that has one. */
+  private siteAbove(object: THREE.Object3D): Site {
+    for (let o: THREE.Object3D | null = object; o; o = o.parent) {
+      const site = siteOf(o)
+      if (site) return site
+    }
+    return POLE
+  }
+
   private cameraFor(level: number, source: THREE.PerspectiveCamera) {
     let camera = this.cameras[level]
     if (!camera) {
@@ -234,8 +252,19 @@ export class PortalRenderer {
   private collectMaterials(scene: THREE.Scene) {
     this.worldMaterials.clear()
     scene.traverse((object) => {
-      const material = (object as THREE.Mesh).material
-      if (!material) return
+      const mesh = object as THREE.Mesh
+      if (!mesh.material) return
+      if (!this.sited.has(mesh)) {
+        // Draw the mesh where its site is. Meshes can arrive late, so look every frame.
+        this.sited.add(mesh)
+        const site = this.siteAbove(mesh)
+        if (site !== POLE) {
+          mesh.material = Array.isArray(mesh.material)
+            ? mesh.material.map((m) => materialAt(m, site))
+            : materialAt(mesh.material, site)
+        }
+      }
+      const material = mesh.material
       for (const m of Array.isArray(material) ? material : [material]) {
         if (!this.worldMaterials.has(m)) {
           planetMaterial(m)

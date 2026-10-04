@@ -1,3 +1,4 @@
+import { Site } from '../../engine/planet'
 import type { Structure } from '../World'
 import { glow, matte, palette } from '../materials'
 
@@ -13,6 +14,8 @@ const RATIO = 0.25
 export function resizingDoors(onResize: () => void, onEnterVault: () => void): Structure {
   return {
     name: 'resizing-doors',
+    // Most of the way round the planet from the start.
+    site: new Site('resizing-doors', -70, -70),
     build(world) {
       const tall = world.addDoor({
         name: 'resize-tall',

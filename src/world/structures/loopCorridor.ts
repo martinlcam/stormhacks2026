@@ -1,3 +1,4 @@
+import { Site } from '../../engine/planet'
 import type { Structure } from '../World'
 import { glow, matte, palette } from '../materials'
 
@@ -10,6 +11,8 @@ import { glow, matte, palette } from '../materials'
 export function loopCorridor(onEnter: () => void): Structure {
   return {
     name: 'loop-corridor',
+    // A third of the way round the planet from the start, to the east.
+    site: new Site('loop-corridor', 80, 0),
     build(world) {
       const z = -3
       const west = world.addDoor({

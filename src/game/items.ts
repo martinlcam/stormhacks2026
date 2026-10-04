@@ -1,7 +1,15 @@
 import * as THREE from 'three'
 import { GRAVITY } from '../engine/Body'
 import type { Engine } from '../engine/Engine'
-import { placedFrom, redirect, seenFrom } from '../engine/planet'
+import {
+  elsewhere,
+  keepNearestSite,
+  placedFrom,
+  rechart,
+  redirect,
+  seenFrom,
+  siteUniform,
+} from '../engine/planet'
 import type { Portal } from '../engine/Portal'
 import { yawDelta } from '../engine/portalMath'
 import type { Item } from '../world/World'
@@ -90,6 +98,7 @@ const localEnd = new THREE.Vector3()
 const offset = new THREE.Vector3()
 const toItem = new THREE.Vector3()
 const seen = new THREE.Vector3()
+const charted = new THREE.Vector3()
 const hand = new THREE.Vector3()
 const mark = new THREE.Vector3()
 const launch = new THREE.Vector3()
@@ -255,6 +264,7 @@ export class ItemSystem {
       const { body, mesh } = item
       if (!body.resting) {
         body.step(dt, world.colliders, world.portals)
+        keepNearestSite(body, world.sites)
         // Roll: turn about the axis at right angles to the direction of travel.
         spin.crossVectors(body.up, body.velocity)
         const along = spin.length()
@@ -264,6 +274,7 @@ export class ItemSystem {
       }
       if (body.position.y < -40) {
         body.position.copy(item.home)
+        body.site = item.homeSite
         body.velocity.set(0, 0, 0)
         body.up.set(0, 1, 0)
         body.scale = 1
@@ -271,6 +282,7 @@ export class ItemSystem {
       }
       mesh.position.copy(body.position)
       mesh.scale.setScalar(body.scale)
+      siteUniform(mesh.material as THREE.Material).value = body.site.motion
     }
 
     if (this.charging !== null) {
@@ -301,6 +313,7 @@ export class ItemSystem {
 
     this.heldThrough = null
     for (const portal of world.portals) {
+      if (portal.site !== player.site) continue
       const size = body.radius * 2
       if (portal.fits(size, size) && rayPortal(eye, direction, length, portal) < Infinity) {
         this.heldThrough = portal
@@ -311,6 +324,7 @@ export class ItemSystem {
       // Stop short of anything solid, leaving room for the item itself.
       let free = length
       for (const box of world.colliders) {
+        if (elsewhere(box, player.site)) continue
         free = Math.min(free, rayBox(eye, direction, box) - body.radius)
       }
       hold.copy(eye).addScaledVector(direction, Math.max(HOLD_MIN * player.scale, free))
@@ -320,11 +334,15 @@ export class ItemSystem {
     // `hold` is in the frame around the player; the body lives on the map.
     placedFrom(player.position, hold, hold)
     body.position.copy(hold)
+    body.site = player.site
     body.yaw = player.yaw
     body.up.copy(player.up)
     mesh.position.copy(hold)
     mesh.scale.setScalar(body.scale)
     mesh.rotation.set(0, player.yaw, 0)
+    // Held out through a doorway, it is drawn at the far door's site.
+    const drawnAt = this.heldThrough ? this.heldThrough.target.site : player.site
+    siteUniform(mesh.material as THREE.Material).value = drawnAt.motion
     if (this.heldThrough) {
       const portal = this.heldThrough
       mesh.position.applyMatrix4(portal.transform)
@@ -343,6 +361,7 @@ export class ItemSystem {
       // crosshair is on, so the throw goes where the player is looking.
       let distance = Infinity
       for (const box of this.engine.world.colliders) {
+        if (elsewhere(box, player.site)) continue
         distance = Math.min(distance, rayBox(eye, look, box))
       }
       distance =
@@ -367,6 +386,8 @@ export class ItemSystem {
     origin.copy(eye)
     direction.copy(look)
     let reach = REACH * player.scale
+    // The site whose map the aim ray is on; a doorway can change it.
+    let site = player.site
     // An item on this side of a doorway the crosshair is pointing into.
     let beside: Item | null = null
 
@@ -378,7 +399,8 @@ export class ItemSystem {
       for (const item of world.items) {
         const { radius } = item.body
         // Where the item is as seen from here, which is what the crosshair is on.
-        const position = seenFrom(origin, item.body.position, seen)
+        rechart(item.body.position, item.body.site, site, charted)
+        const position = seenFrom(origin, charted, seen)
         const miss = aimMiss(origin, direction, position, radius, reach)
         if (miss > best) continue
         toItem.subVectors(position, origin)
@@ -386,6 +408,7 @@ export class ItemSystem {
         toItem.divideScalar(distance)
         let clear = true
         for (const box of world.colliders) {
+          if (elsewhere(box, site)) continue
           if (rayBox(origin, toItem, box) < distance - radius) {
             clear = false
             break
@@ -398,10 +421,13 @@ export class ItemSystem {
       }
 
       let wall = reach
-      for (const box of world.colliders) wall = Math.min(wall, rayBox(origin, direction, box))
+      for (const box of world.colliders) {
+        if (!elsewhere(box, site)) wall = Math.min(wall, rayBox(origin, direction, box))
+      }
       let door: Portal | null = null
       let doorAt = wall
       for (const portal of world.portals) {
+        if (portal.site !== site) continue
         const t = rayPortal(origin, direction, reach, portal)
         if (t < doorAt) {
           doorAt = t
@@ -417,6 +443,7 @@ export class ItemSystem {
       origin.addScaledVector(direction, doorAt).applyMatrix4(door.transform)
       direction.transformDirection(door.transform)
       reach = (reach - doorAt) * (door.target.scale / door.scale)
+      site = door.target.site
     }
     return beside
   }

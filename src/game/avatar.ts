@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { frameFor } from '../engine/gravity'
+import { siteUniform } from '../engine/planet'
 import type { PlayerController } from '../engine/PlayerController'
 import { PORTAL_ONLY_LAYER } from '../engine/PortalRenderer'
 import { palette } from '../world/materials'
@@ -84,6 +85,8 @@ function outline(): THREE.Vector2[] {
   portals, so the player never looks down on the top of their own head.
 */
 export class Avatar {
+  /* Where each of the figure's materials is drawn; see `siteUniform`. */
+  private readonly sites: { value: THREE.Matrix4 }[] = []
   readonly body: THREE.Mesh
   readonly head: THREE.Mesh
   readonly stalk: THREE.Mesh
@@ -128,6 +131,10 @@ export class Avatar {
     for (const mesh of [this.head, this.stalk, ...this.leaves]) {
       mesh.layers.set(PORTAL_ONLY_LAYER)
     }
+    this.group.traverse((object) => {
+      const material = (object as THREE.Mesh).material as THREE.Material | undefined
+      if (material) this.sites.push(siteUniform(material))
+    })
     scene.add(this.group)
   }
 
@@ -142,5 +149,7 @@ export class Avatar {
     group.scale.setScalar(player.scale)
     // The body has already turned left or right; the head adds looking up or down.
     head.rotation.set(player.pitch, 0, 0)
+    // Draw the figure at whichever site's map the player is on.
+    for (const uniform of this.sites) uniform.value = player.site.motion
   }
 }

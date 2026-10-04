@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { type Axis, frameFor } from './gravity'
-import { planetMotion } from './planet'
+import { elsewhere, onPlanet, planetMotion, POLE, type Site } from './planet'
 import { portalTransform } from './portalMath'
 
 /*
@@ -44,6 +44,8 @@ export interface PortalOptions {
     doorway that resizes whatever passes through it.
   */
   scale?: number
+  /* The site whose map `position` is on. Defaults to the pole. */
+  site?: Site
 }
 
 const corner = new THREE.Vector3()
@@ -57,6 +59,7 @@ export class Portal {
   readonly width: number
   readonly height: number
   readonly scale: number
+  readonly site: Site
   /* Stencil/depth surface. Never added to the world scene. */
   readonly mesh: THREE.Mesh
   /* World plane of the opening, normal pointing out of the front. */
@@ -95,6 +98,7 @@ export class Portal {
     this.width = options.width
     this.height = options.height
     this.scale = options.scale ?? 1
+    this.site = options.site ?? POLE
     this.radius = (Math.hypot(options.width, options.height) / 2 + PORTAL_THICKNESS) * this.scale
 
     const geometry = new THREE.BoxGeometry(options.width, options.height, PORTAL_THICKNESS)
@@ -123,12 +127,19 @@ export class Portal {
     portal once they are all linked and the planet is configured.
   */
   settle() {
-    planetMotion(this.mesh.position, this.motion)
+    this.place(this.motion)
     this.spacePlane.copy(this.plane).applyMatrix4(this.motion)
     this.spaceCenter.copy(this.center).applyMatrix4(this.motion)
     // Undo this door's motion, cross on the flat map, apply the far door's.
-    const far = planetMotion(this.target.mesh.position, this.view)
+    const far = this.target.place(this.view)
     this.view.copy(far).multiply(this.transform).multiply(scratch.copy(this.motion).invert())
+  }
+
+  /* From where this door is on its site's map to where it stands in space. */
+  private place(out: THREE.Matrix4): THREE.Matrix4 {
+    planetMotion(this.mesh.position, out)
+    if (onPlanet(this.mesh.position)) out.premultiply(this.site.motion)
+    return out
   }
 
   link(target: Portal) {
@@ -164,6 +175,7 @@ export class Portal {
   computeGhostColliders(colliders: readonly THREE.Box3[]) {
     this.ghostColliders.clear()
     for (const box of colliders) {
+      if (elsewhere(box, this.site)) continue
       let minX = Infinity
       let maxX = -Infinity
       let minY = Infinity

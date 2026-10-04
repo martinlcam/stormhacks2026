@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { type Axis, frameFor, inverseFrameFor, reorient, upVector } from './gravity'
-import { onPlanet, standOnPlanet, upAt, walkOnPlanet } from './planet'
+import { elsewhere, onPlanet, POLE, type Site, standOnPlanet, upAt, walkOnPlanet } from './planet'
 import type { Portal } from './Portal'
 
 const RADIUS = 0.3
@@ -52,6 +52,8 @@ export class PlayerController {
   pitch = 0
   /* Which way is up. A portal that turns the player changes it. */
   axis: Axis = 'y+'
+  /* The site whose map the player is on. Only that site's boxes and doors touch them. */
+  site: Site = POLE
   /*
     Size relative to normal. Every length the player owns (body, stride,
     jump, gravity, eye height) is multiplied by it, so being small feels
@@ -114,6 +116,7 @@ export class PlayerController {
     this.yaw = this.spawnYaw
     this.pitch = 0
     this.axis = 'y+'
+    this.site = POLE
     this.scale = 1
     this.sink = 0
     this.tilt.identity()
@@ -178,6 +181,10 @@ export class PlayerController {
     if (onPlanet(this.position)) {
       standOnPlanet(camera, this.position, eye, this.yaw, this.pitch)
       upAt(this.position, cameraUp)
+      // That is where the player is on their site's map; now to where the site is.
+      camera.position.applyMatrix4(this.site.motion)
+      camera.quaternion.premultiply(this.site.rotation)
+      cameraUp.applyQuaternion(this.site.rotation)
     } else {
       camera.position.copy(this.position).addScaledVector(this.up, eye)
       this.orientation(this.axis, this.yaw, this.pitch, camera.quaternion)
@@ -216,7 +223,9 @@ export class PlayerController {
       this.position.addScaledVector(this.velocity, dt)
     }
 
-    const doorway = portals.find((portal) => this.inDoorway(portal, before))
+    const doorway = portals.find(
+      (portal) => portal.site === this.site && this.inDoorway(portal, before),
+    )
     this.collideInFrame(colliders, doorway)
     // Passing the point opposite the pole moves the walker to the far side
     // of the map in one step. That is not a path a portal could be on.
@@ -265,7 +274,7 @@ export class PlayerController {
 
     for (let i = 0; i < boxes.length; i++) {
       const box = boxes[i]
-      if (doorway?.ghostColliders.has(originals[i])) continue
+      if (doorway?.ghostColliders.has(originals[i]) || elsewhere(originals[i], this.site)) continue
 
       // Closest point of the box's footprint to the player's axis.
       const cx = Math.max(box.min.x, Math.min(p.x, box.max.x))
@@ -363,6 +372,7 @@ export class PlayerController {
     eyeBefore.copy(before).addScaledVector(this.up, eye)
     eyeAfter.copy(this.position).addScaledVector(this.up, eye)
     for (const portal of portals) {
+      if (portal.site !== this.site) continue
       portal.toLocal(eyeBefore, localBefore)
       portal.toLocal(eyeAfter, localAfter)
       if (localBefore.z <= 0 || localAfter.z > 0) continue
@@ -379,6 +389,7 @@ export class PlayerController {
       this.scale *= ratio
       this.velocity.transformDirection(portal.transform).multiplyScalar(speed)
       // The door may turn the player onto a wall or the ceiling.
+      this.site = portal.target.site
       const turned = reorient(this.axis, this.yaw, portal.transform)
       this.axis = turned.axis
       this.yaw = turned.yaw

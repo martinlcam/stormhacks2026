@@ -32,6 +32,15 @@ import * as THREE from 'three'
   collision and portals keep working in the flat map.
 
   Rooms outside the disk are not part of the planet and stay flat.
+
+  Sites. One map cannot cover the whole planet without squeezing whatever
+  is far from its pole. So the planet has many maps. A `Site` is a place on
+  the planet with a map of its own, centred on itself, and every structure
+  is built on the map of its site, where it is close to the centre and
+  true to shape. Each solid box, door, walker and thrown thing belongs to
+  one site and is worked out on that site's map. A walker changes to the
+  map of whichever site is nearest as they go. Drawing turns each site's
+  map onto the sphere and then carries it to where the site is.
 */
 
 const planet = {
@@ -39,6 +48,56 @@ const planet = {
   k: 0,
   /* Radius of the map disk, πR. */
   reach: 0,
+}
+
+const everySite: Site[] = []
+const UP = new THREE.Vector3(0, 1, 0)
+const tip = new THREE.Quaternion()
+const tipAxis = new THREE.Vector3()
+const shift = new THREE.Matrix4()
+
+export class Site {
+  /* Carries space as drawn around the pole to where this site is. */
+  readonly motion = new THREE.Matrix4()
+  /* The turn in `motion`, and its inverse. */
+  readonly rotation = new THREE.Quaternion()
+  readonly inverse = new THREE.Quaternion()
+  /* Which way is up at the middle of the site, in space. */
+  readonly anchor = new THREE.Vector3(0, 1, 0)
+
+  /*
+    `x` and `z` say where the site is as a point on the pole's map: that far
+    from the pole, in that direction. `heading` turns the site about its own
+    middle, in radians.
+  */
+  constructor(
+    readonly name: string,
+    readonly x = 0,
+    readonly z = 0,
+    readonly heading = 0,
+  ) {
+    everySite.push(this)
+    this.settle()
+  }
+
+  /* Work out where the site is on the planet as it is now configured. */
+  settle() {
+    const d = Math.hypot(this.x, this.z)
+    this.rotation.setFromAxisAngle(UP, this.heading)
+    if (planet.k > 0 && d > 1e-9) {
+      // Tip "up" towards the direction away from the pole.
+      tip.setFromAxisAngle(tipAxis.set(this.z / d, 0, -this.x / d), d * planet.k)
+      this.rotation.premultiply(tip)
+    }
+    this.inverse.copy(this.rotation).invert()
+    this.anchor.set(0, 1, 0).applyQuaternion(this.rotation)
+    // A turn about the planet's centre, which is 1 / k below the pole.
+    const radius = planet.k > 0 ? 1 / planet.k : 0
+    this.motion
+      .makeRotationFromQuaternion(this.rotation)
+      .premultiply(shift.makeTranslation(0, -radius, 0))
+      .multiply(shift.makeTranslation(0, radius, 0))
+  }
 }
 
 export const planetUniforms = {
@@ -55,6 +114,28 @@ export function configurePlanet(circumference: number | null) {
   planetUniforms.uPlanetK.value = planet.k
   // A little slack, so objects centred on the rim still count.
   planetUniforms.uPlanetReach.value = planet.reach + 1
+  for (const site of everySite) site.settle()
+}
+
+/* The site at the pole, where the map and the planet agree with no turning. */
+export const POLE = new Site('pole')
+
+const owners = new WeakMap<object, Site>()
+
+/* Say that a box, mesh or group belongs to a site. */
+export function assign(thing: object, site: Site) {
+  owners.set(thing, site)
+}
+
+/* The site a thing was given, if any. */
+export function siteOf(thing: object): Site | undefined {
+  return owners.get(thing)
+}
+
+/* True for something that belongs to a different site. Unowned things are everywhere. */
+export function elsewhere(thing: object, site: Site): boolean {
+  const owner = owners.get(thing)
+  return owner !== undefined && owner !== site
 }
 
 /* True when this map point is on the planet, not in a detached room. */
@@ -65,9 +146,9 @@ export function onPlanet(point: THREE.Vector3): boolean {
 const PARS = /* glsl */ `
 uniform float uPlanetK;
 uniform float uPlanetReach;
+uniform mat4 uSite;
 
-vec3 ontoPlanet(vec3 p, vec3 objectCentre) {
-  if (uPlanetK == 0.0 || length(objectCentre.xz) > uPlanetReach) return p;
+vec3 ontoPlanet(vec3 p) {
   float d = length(p.xz);
   if (d < 1e-5) return p;
   float theta = d * uPlanetK;
@@ -76,7 +157,6 @@ vec3 ontoPlanet(vec3 p, vec3 objectCentre) {
 }
 
 vec3 ontoPlanetRigid(vec3 p, vec3 c) {
-  if (uPlanetK == 0.0 || length(c.xz) > uPlanetReach) return p;
   float d = length(c.xz);
   vec2 outward = d < 1e-5 ? vec2(1.0, 0.0) : c.xz / d;
   float theta = d * uPlanetK;
@@ -96,11 +176,14 @@ vec4 mvPosition = vec4(transformed, 1.0);
   mvPosition = instanceMatrix * mvPosition;
 #endif
 vec4 planetPosition = modelMatrix * mvPosition;
-#ifdef PLANET_RIGID
-  planetPosition.xyz = ontoPlanetRigid(planetPosition.xyz, modelMatrix[3].xyz);
-#else
-  planetPosition.xyz = ontoPlanet(planetPosition.xyz, modelMatrix[3].xyz);
-#endif
+if (uPlanetK != 0.0 && length(modelMatrix[3].xz) <= uPlanetReach) {
+  #ifdef PLANET_RIGID
+    planetPosition.xyz = ontoPlanetRigid(planetPosition.xyz, modelMatrix[3].xyz);
+  #else
+    planetPosition.xyz = ontoPlanet(planetPosition.xyz);
+  #endif
+  planetPosition = uSite * vec4(planetPosition.xyz, 1.0);
+}
 mvPosition = viewMatrix * planetPosition;
 gl_Position = projectionMatrix * mvPosition;
 `
@@ -113,14 +196,50 @@ export function planetMaterial(material: THREE.Material) {
   // A material may already change its own shader; keep that.
   const before = material.onBeforeCompile
   const key = material.customProgramCacheKey()
-  material.onBeforeCompile = (shader, renderer) => {
-    before.call(material, shader, renderer)
+  // `this` and not `material`: a copy of the material for another site shares this function.
+  material.onBeforeCompile = function (this: THREE.Material, shader, renderer) {
+    before.call(this, shader, renderer)
     Object.assign(shader.uniforms, planetUniforms)
+    shader.uniforms.uSite = siteUniform(this)
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', `#include <common>\n${PARS}`)
       .replace('#include <project_vertex>', PROJECT)
   }
   material.customProgramCacheKey = () => `planet/${key}`
+}
+
+const siteUniforms = new WeakMap<THREE.Material, { value: THREE.Matrix4 }>()
+
+/*
+  Which site a material draws at. Set `value` to a site's `motion` to draw
+  whatever uses the material there; it starts at the pole.
+*/
+export function siteUniform(material: THREE.Material): { value: THREE.Matrix4 } {
+  let uniform = siteUniforms.get(material)
+  if (!uniform) {
+    uniform = { value: POLE.motion }
+    siteUniforms.set(material, uniform)
+  }
+  return uniform
+}
+
+const copies = new Map<Site, WeakMap<THREE.Material, THREE.Material>>()
+
+/* The same material, drawing at a site. One copy is kept for each site. */
+export function materialAt<M extends THREE.Material>(material: M, site: Site): M {
+  if (site === POLE) return material
+  let forSite = copies.get(site)
+  if (!forSite) copies.set(site, (forSite = new WeakMap()))
+  let copy = forSite.get(material) as M | undefined
+  if (!copy) {
+    planetMaterial(material)
+    copy = material.clone() as M
+    copy.onBeforeCompile = material.onBeforeCompile
+    copy.customProgramCacheKey = material.customProgramCacheKey
+    siteUniform(copy).value = site.motion
+    forSite.set(material, copy)
+  }
+  return copy
 }
 
 /*
@@ -203,6 +322,15 @@ export function walkOnPlanet(walker: Walker, dt: number) {
   heading.applyAxisAngle(axis, angle)
 
   // Read the new place back off the sphere as map coordinates.
+  land(walker, up)
+}
+
+/*
+  Put a walker where `up` is on the sphere, moving along `travel` and facing
+  along `heading`, by reading all three back as map coordinates.
+*/
+function land(walker: Walker, up: THREE.Vector3) {
+  const { position, velocity } = walker
   const theta = Math.acos(Math.max(-1, Math.min(1, up.y)))
   const flat = Math.hypot(up.x, up.z)
   const rx = flat > 1e-9 ? up.x / flat : frame.rx
@@ -216,6 +344,75 @@ export function walkOnPlanet(walker: Walker, dt: number) {
   velocity.z = lowered.z
   frame.lower(heading, lowered)
   walker.yaw = Math.atan2(-lowered.x, -lowered.z)
+}
+
+const between = new THREE.Quaternion()
+const spot = new THREE.Vector3()
+
+/*
+  A point on one site's map → the same place on another site's map. Height
+  is unchanged. Off the planet the point is returned as it is.
+*/
+export function rechart(
+  point: THREE.Vector3,
+  from: Site,
+  to: Site,
+  target: THREE.Vector3,
+): THREE.Vector3 {
+  if (from === to || !onPlanet(point)) return target.copy(point)
+  spot.copy(frame.set(point.x, point.z).up)
+  spot.applyQuaternion(between.copy(to.inverse).multiply(from.rotation))
+  const theta = Math.acos(Math.max(-1, Math.min(1, spot.y)))
+  const flat = Math.hypot(spot.x, spot.z)
+  if (flat < 1e-9) return target.set(0, point.y, 0)
+  return target.set(
+    ((spot.x / flat) * theta) / planet.k,
+    point.y,
+    ((spot.z / flat) * theta) / planet.k,
+  )
+}
+
+/* A walker that knows which site's map it is on. */
+export interface Sited extends Walker {
+  site: Site
+}
+
+/* Move a walker onto another site's map. Where they are in space does not change. */
+export function resite(walker: Sited, to: Site) {
+  const from = walker.site
+  walker.site = to
+  if (from === to || !onPlanet(walker.position)) return
+  const { position, velocity } = walker
+  frame.set(position.x, position.z)
+  frame.lift(velocity.x, velocity.z, travel)
+  frame.lift(-Math.sin(walker.yaw), -Math.cos(walker.yaw), heading)
+  between.copy(to.inverse).multiply(from.rotation)
+  spot.copy(frame.up).applyQuaternion(between)
+  travel.applyQuaternion(between)
+  heading.applyQuaternion(between)
+  land(walker, spot)
+}
+
+/* A walker stays on a site's map until another site is nearer by this many metres. */
+const SITE_MARGIN = 2
+
+/* Keep a walker on the map of the site nearest to them. */
+export function keepNearestSite(walker: Sited, sites: readonly Site[]) {
+  if (!onPlanet(walker.position) || sites.length < 2) return
+  spot.copy(frame.set(walker.position.x, walker.position.z).up)
+  spot.applyQuaternion(walker.site.rotation)
+  const away = (site: Site) =>
+    Math.acos(Math.max(-1, Math.min(1, spot.dot(site.anchor)))) / planet.k
+  let nearest = walker.site
+  let least = away(walker.site) - SITE_MARGIN
+  for (const site of sites) {
+    const distance = away(site)
+    if (distance < least) {
+      least = distance
+      nearest = site
+    }
+  }
+  if (nearest !== walker.site) resite(walker, nearest)
 }
 
 const forward = new THREE.Vector3()

@@ -31,7 +31,7 @@ export function bootstrap(canvas: HTMLCanvasElement): () => void {
       () => game.discover('small-world'),
     ),
   ]
-  for (const structure of structures) structure.build(world)
+  for (const structure of structures) world.build(structure)
   world.finalize()
 
   const engine = new Engine(canvas, world)

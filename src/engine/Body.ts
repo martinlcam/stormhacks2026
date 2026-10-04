@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { axisOf, upVector } from './gravity'
-import { onPlanet, walkOnPlanet } from './planet'
+import { elsewhere, onPlanet, POLE, type Site, walkOnPlanet } from './planet'
 import type { Portal } from './Portal'
 import { yawDelta } from './portalMath'
 
@@ -40,6 +40,8 @@ export class Body {
     turns things turns this too. On the planet it is always +y.
   */
   readonly up = new THREE.Vector3(0, 1, 0)
+  /* The site whose map the ball is on. Only that site's boxes and doors touch it. */
+  site: Site = POLE
   /* Size multiplier. Resizing portals change it. */
   scale = 1
   /* True once the ball has stopped; physics is skipped until it is woken. */
@@ -61,6 +63,7 @@ export class Body {
     this.velocity.transformDirection(portal.transform).multiplyScalar(speed)
     this.yaw += yawDelta(portal.transform)
     this.scale *= ratio
+    this.site = portal.target.site
     this.up.transformDirection(portal.transform)
     this.up.copy(onPlanet(this.position) ? upVector('y+') : upVector(axisOf(this.up)))
   }
@@ -89,7 +92,9 @@ export class Body {
     const jumped = before.distanceTo(this.position) > this.velocity.length() * dt * 4 + 1
 
     const size = this.radius * 2
-    const doorway = portals.find((portal) => portal.fits(size, size) && portal.inDoorway(before))
+    const doorway = portals.find(
+      (portal) => portal.site === this.site && portal.fits(size, size) && portal.inDoorway(before),
+    )
     const grounded = this.collide(colliders, doorway)
     if (!jumped) this.traverse(portals)
 
@@ -114,7 +119,7 @@ export class Body {
     let grounded = false
 
     for (const box of colliders) {
-      if (doorway?.ghostColliders.has(box)) continue
+      if (doorway?.ghostColliders.has(box) || elsewhere(box, this.site)) continue
       box.clampPoint(p, closest)
       normal.subVectors(p, closest)
       const distSq = normal.lengthSq()
@@ -153,6 +158,7 @@ export class Body {
   private traverse(portals: readonly Portal[]) {
     const size = this.radius * 2
     for (const portal of portals) {
+      if (portal.site !== this.site) continue
       portal.toLocal(before, localBefore)
       portal.toLocal(this.position, localAfter)
       if (localBefore.z <= 0 || localAfter.z > 0) continue

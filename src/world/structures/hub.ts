@@ -63,7 +63,7 @@ export const hub: Structure = {
     ground.frustumCulled = false
     world.scene.add(ground)
     // On the map the ground is a flat slab under the whole disk.
-    world.addCollider([-reach - 12, -1, -reach - 12], [reach + 12, 0, reach + 12])
+    world.addCollider([-reach - 12, -1, -reach - 12], [reach + 12, 0, reach + 12], true)
 
     // Gems to carry and throw, set out around the spawn point.
     world.addItem({ position: [1.5, 0.18, -0.5], material: glow(palette.cyan, 1.2) })

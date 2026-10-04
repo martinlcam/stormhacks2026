@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { Body } from '../engine/Body'
 import { type Axis, frameFor } from '../engine/gravity'
+import { assign, POLE, type Site } from '../engine/planet'
 import { Portal } from '../engine/Portal'
 import { overgrowth, WOOD_TILE, woodMaterial } from './foliage'
 
@@ -92,11 +93,19 @@ export interface Item {
   body: Body
   mesh: THREE.Mesh
   home: THREE.Vector3
+  homeSite: Site
 }
 
 /* A self-contained piece of the sandbox. One file per impossible structure. */
 export interface Structure {
   name: string
+  /*
+    Where on the planet the structure stands. Its coordinates are then on
+    that site's own map, measured from the site's middle. Keep what is built
+    within about 20 m of the middle, and sites at least 50 m apart. Defaults
+    to the pole.
+  */
+  site?: Site
   build(world: World): void
 }
 
@@ -112,13 +121,35 @@ export class World {
   readonly colliders: THREE.Box3[] = []
   readonly portals: Portal[] = []
   readonly items: Item[] = []
+  /* Every site something is built on. */
+  readonly sites: Site[] = [POLE]
+  /* The site of the structure being built. */
+  private site = POLE
   /*
     Circumference of the planet that the plaza around the origin is drawn
     as, or null for a flat world.
   */
   planetSize: number | null = null
   private readonly updaters: Updater[] = []
-  private readonly triggers: { box: THREE.Box3; inside: boolean; onEnter: () => void }[] = []
+  private readonly triggers: {
+    box: THREE.Box3
+    site: Site
+    inside: boolean
+    onEnter: () => void
+  }[] = []
+
+  /* Build a structure at its site. */
+  build(structure: Structure) {
+    this.site = structure.site ?? POLE
+    if (!this.sites.includes(this.site)) this.sites.push(this.site)
+    structure.build(this)
+    this.site = POLE
+  }
+
+  private solid(box: THREE.Box3) {
+    assign(box, this.site)
+    this.colliders.push(box)
+  }
 
   addBox({ size, position, material, collide = true, tile }: BoxOptions): THREE.Mesh {
     // Bending moves vertices, so long faces need enough of them to curve.
@@ -130,8 +161,9 @@ export class World {
     mesh.position.set(...position)
     // The stored bounds are not where a bent mesh is drawn.
     mesh.frustumCulled = false
+    assign(mesh, this.site)
     this.scene.add(mesh)
-    if (collide) this.colliders.push(new THREE.Box3().setFromObject(mesh))
+    if (collide) this.solid(new THREE.Box3().setFromObject(mesh))
     return mesh
   }
 
@@ -144,15 +176,21 @@ export class World {
     this.scene.add(mesh)
     const body = new Body(radius)
     body.position.set(...position)
+    body.site = this.site
     mesh.position.copy(body.position)
-    const item = { body, mesh, home: body.position.clone() }
+    const item = { body, mesh, home: body.position.clone(), homeSite: this.site }
     this.items.push(item)
     return item
   }
 
-  /* Something solid with nothing to draw. */
-  addCollider(min: Vec3, max: Vec3) {
-    this.colliders.push(new THREE.Box3(new THREE.Vector3(...min), new THREE.Vector3(...max)))
+  /*
+    Something solid with nothing to draw. `everywhere` makes it solid on
+    every site's map, as the ground is.
+  */
+  addCollider(min: Vec3, max: Vec3, everywhere = false) {
+    const box = new THREE.Box3(new THREE.Vector3(...min), new THREE.Vector3(...max))
+    if (everywhere) this.colliders.push(box)
+    else this.solid(box)
   }
 
   /*
@@ -206,12 +244,14 @@ export class World {
       width,
       height,
       scale,
+      site: this.site,
     })
     if (overgrown) {
       const growth = overgrowth({ name: options.name, width, height, post })
       growth.position.set(...position)
       growth.quaternion.setFromRotationMatrix(rotation)
       growth.scale.setScalar(scale)
+      assign(growth, this.site)
       this.scene.add(growth)
     }
     this.portals.push(portal)
@@ -227,12 +267,12 @@ export class World {
   /* Run `onEnter` each time the player's feet move into the box. */
   addTrigger(min: Vec3, max: Vec3, onEnter: () => void) {
     const box = new THREE.Box3(new THREE.Vector3(...min), new THREE.Vector3(...max))
-    this.triggers.push({ box, inside: false, onEnter })
+    this.triggers.push({ box, site: this.site, inside: false, onEnter })
   }
 
-  checkTriggers(player: THREE.Vector3) {
+  checkTriggers(player: THREE.Vector3, site: Site = POLE) {
     for (const trigger of this.triggers) {
-      const inside = trigger.box.containsPoint(player)
+      const inside = trigger.site === site && trigger.box.containsPoint(player)
       if (inside && !trigger.inside) trigger.onEnter()
       trigger.inside = inside
     }
