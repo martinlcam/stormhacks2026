@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { planetMaterial, planetMotion } from './planet'
+import { onPlanet, planetMaterial, planetMotion, siteUniform } from './planet'
 import type { Portal } from './Portal'
 
 /* A crossing object has one clipped surface in each room, even while its
@@ -47,15 +47,18 @@ export class PortalItemView {
     this.nearClip.constant = 1e6
     this.material.emissiveIntensity = this.original.emissiveIntensity
     this.copy.material.emissiveIntensity = this.original.emissiveIntensity
+    const site = siteUniform(this.material).value
+    siteUniform(this.copy.material).value = site
     this.center.copy(this.mesh.position).applyMatrix4(planetMotion(this.mesh.position, this.motion))
+    if (onPlanet(this.mesh.position)) this.center.applyMatrix4(site)
+
     this.radius = this.baseRadius * this.mesh.scale.x
 
     for (const portal of this.portals) {
       const distance = portal.spacePlane.distanceToPoint(this.center)
       if (Math.abs(distance) >= this.radius) continue
 
-      planetMotion(portal.mesh.position, this.motion).invert()
-      this.local.copy(this.center).applyMatrix4(this.motion).applyMatrix4(portal.worldInverse)
+      this.local.copy(this.center).applyMatrix4(portal.spaceInverse)
       if (
         Math.abs(this.local.x) > portal.width / 2 ||
         this.local.y < 0 ||

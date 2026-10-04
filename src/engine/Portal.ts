@@ -75,6 +75,8 @@ export class Portal {
   */
   readonly spacePlane = new THREE.Plane()
   readonly spaceCenter = new THREE.Vector3()
+  /* Rendered world → opening frame, including the site's placement. */
+  readonly spaceInverse = new THREE.Matrix4()
   /* Carries a camera in space through this portal to the target's side. */
   readonly view = new THREE.Matrix4()
   private readonly motion = new THREE.Matrix4()
@@ -128,6 +130,7 @@ export class Portal {
   */
   settle() {
     this.place(this.motion)
+    this.spaceInverse.copy(this.motion).invert().premultiply(this.worldInverse)
     this.spacePlane.copy(this.plane).applyMatrix4(this.motion)
     this.spaceCenter.copy(this.center).applyMatrix4(this.motion)
     // Undo this door's motion, cross on the flat map, apply the far door's.

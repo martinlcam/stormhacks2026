@@ -85,6 +85,7 @@ export function rockyGround(): THREE.MeshStandardMaterial {
       .replace(
         '#include <common>',
         /* glsl */ `#include <common>
+        #define DYNAMIC_LIGHT_NORMAL groundPointNormal
         uniform sampler2D uClose;
         uniform float uFar;
         uniform float uNear;
@@ -123,6 +124,7 @@ export function rockyGround(): THREE.MeshStandardMaterial {
       .replace(
         '#include <normal_fragment_maps>',
         /* glsl */ `
+        vec3 groundPointNormal;
         {
           vec3 p = ground * uNear;
           vec3 x = texture2D(normalMap, p.zy).xyz * 2.0 - 1.0;
@@ -131,6 +133,8 @@ export function rockyGround(): THREE.MeshStandardMaterial {
           vec3 bump = weight.x * vec3(0.0, x.y, x.x)
             + weight.y * vec3(y.x, 0.0, y.y)
             + weight.z * vec3(z.x, z.y, 0.0);
+          // Nearby lamps need the actual orientation of the curved ground.
+          groundPointNormal = normalize(mat3(viewMatrix) * normalize(groundUp + bump * normalScale.x));
           // The ground is lit as if it were flat, so that no side of the
           // planet is in night.
           normal = normalize(mat3(viewMatrix) * normalize(vec3(0.0, 1.0, 0.0) + flatways(bump, groundUp) * normalScale.x));
@@ -139,13 +143,20 @@ export function rockyGround(): THREE.MeshStandardMaterial {
       .replace(
         '#include <lights_fragment_begin>',
         // The eye must be turned the same way, or the far side shines as if seen from below.
-        THREE.ShaderChunk.lights_fragment_begin.replace(
-          'normalize( vViewPosition )',
-          'normalize(mat3(viewMatrix) * flatways(cameraPosition - vGround, groundUp))',
-        ),
+        THREE.ShaderChunk.lights_fragment_begin
+          .replace(
+            'normalize( vViewPosition )',
+            'normalize(mat3(viewMatrix) * flatways(cameraPosition - vGround, groundUp))',
+          )
+          // The first direct-light call is the point-light loop. Keep the
+          // existing all-day directional/ambient shading for the rest.
+          .replace(
+            'RE_Direct( directLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight );',
+            'RE_Direct( directLight, geometryPosition, groundPointNormal, normalize(vViewPosition), groundPointNormal, material, reflectedLight );',
+          ),
       )
   }
-  material.customProgramCacheKey = () => 'ground'
+  material.customProgramCacheKey = () => 'ground:point-light-normal'
   return material
 }
 
