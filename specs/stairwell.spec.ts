@@ -10,12 +10,14 @@ function tower() {
   let turns = 0
   let rung = 0
   let fell = 0
+  const hits: number[] = []
   const world = new World()
   world.build(
     stairwell(
       () => turns++,
       { hint() {}, solved: () => rung++ },
       { hint() {}, solved: () => fell++ },
+      (strength) => hits.push(strength),
     ),
   )
   world.finalize()
@@ -28,7 +30,7 @@ function tower() {
       player.update(FRAME, world.colliders, world.portals)
     }
   }
-  return { world, player, walk, turns: () => turns, rung: () => rung, fell: () => fell }
+  return { world, player, walk, turns: () => turns, rung: () => rung, fell: () => fell, hits }
 }
 
 /* Walk once round the tower, going up: along each wall in turn. */
@@ -143,6 +145,27 @@ describe('Feature: the endless stairwell', () => {
       expect(body.resting).toBe(true)
       expect(body.position.y).toBeCloseTo(1 + body.radius, 1)
       expect(rung()).toBe(0)
+    })
+
+    it('Given I stand on the lit landing, when a gem is dropped from the top of the tower, then the gong is heard to knock, short of full strength, and more softly as the gem bounces', () => {
+      const { wait, stand, hits } = drop(5.3)
+      stand(true)
+
+      wait(5)
+
+      expect(hits.length).toBeGreaterThan(0)
+      expect(hits[0]).toBeLessThan(1)
+      for (let i = 1; i < hits.length; i++) expect(hits[i]).toBeLessThan(hits[i - 1])
+    })
+
+    it('Given a gem has fallen round the tower until it can fall no faster, when I step onto the lit landing, then the gong is heard at full strength', () => {
+      const { wait, stand, hits } = drop(3)
+      wait(4)
+
+      stand(true)
+      wait(1)
+
+      expect(hits[0]).toBeGreaterThanOrEqual(1)
     })
 
     it('Given a gem has fallen round the tower until it can fall no faster, when I step onto the lit landing, then the gong rings', () => {

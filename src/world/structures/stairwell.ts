@@ -27,6 +27,8 @@ const GONG = 1
   enough to reach 25, so nothing rings it that has not gone round.
 */
 export const RINGING = 27
+/* How fast a gem must hit the gong to be heard at all. */
+const TAP = 2
 /* How far the second puzzle asks the player to fall without landing, in metres. */
 const FALL = 100
 /* Seams passed less than this many seconds apart are one fall: no one walks a turn that fast. */
@@ -62,8 +64,16 @@ const corners = [
 
   The second puzzle is for the player: fall a hundred metres without
   landing, in a tower nine metres tall. Step off into the well.
+
+  `onGong` is told whenever a gem hits the gong, and how hard: its speed as
+  a share of the speed that rings it, so 1 or more is a ring.
 */
-export function stairwell(onTurn: () => void, puzzle: PuzzleEvents, fall: PuzzleEvents): Structure {
+export function stairwell(
+  onTurn: () => void,
+  puzzle: PuzzleEvents,
+  fall: PuzzleEvents,
+  onGong?: (strength: number) => void,
+): Structure {
   return {
     name: 'stairwell',
     build(world) {
@@ -272,11 +282,13 @@ export function stairwell(onTurn: () => void, puzzle: PuzzleEvents, fall: Puzzle
         for (const { body } of world.items) {
           const before = falling.get(body) ?? 0
           falling.set(body, -body.velocity.y)
-          if (solved || !shut || before < RINGING) continue
-          // It was falling fast and now is not: it hit something. Was that the gong?
+          if (!shut || before < TAP) continue
+          // It was falling and now is not: it hit something. Was that the gong?
           const stopped = -body.velocity.y < before / 2
           const rise = body.position.y - GONG
           if (!stopped || !inWell(body.position) || rise < 0 || rise > 1) continue
+          onGong?.(before / RINGING)
+          if (solved || before < RINGING) continue
           solved = true
           puzzle.solved()
           refresh()

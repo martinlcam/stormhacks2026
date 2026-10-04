@@ -5,6 +5,10 @@ const STRIDE = 2.1
 /* The low note under each sky, in hertz. Every door moves to the next. */
 const ROOTS = [55, 49, 61.7, 65.4, 73.4, 46.2]
 
+/* The gong's lowest note, in hertz, and the notes above it as multiples of that. */
+const GONG_PITCH = 98
+const GONG_NOTES = [1, 1.48, 2.02, 2.71, 3.56, 4.93]
+
 /* The rain recording. */
 export const RAIN_FILE = `${import.meta.env.BASE_URL}sounds/rain.mp3`
 /* Seconds of the rain recording that its end is faded into its beginning over. */
@@ -189,6 +193,23 @@ export class Sound {
   /* Something new was discovered. */
   chime() {
     ;[659.3, 830.6, 987.8, 1318.5].forEach((pitch, i) => this.note(pitch, 0.9, 0.12, i * 0.09))
+  }
+
+  /*
+    A gem hitting the gong in the stairwell. `strength` of 1 or more is a
+    ring that takes seconds to die away; less is a dull knock, the quieter
+    and shorter the slower the gem.
+  */
+  gong(strength: number) {
+    const hard = Math.min(1, strength)
+    const seconds = hard < 1 ? 0.3 + hard : 7
+    this.burst({ from: 1400, to: 110, seconds: 0.22, volume: 0.4 * hard })
+    // A gong's notes are not in tune with each other, and the high ones die first.
+    GONG_NOTES.forEach((ratio, i) => {
+      this.note(GONG_PITCH * ratio, seconds / (1 + i * 0.45), (0.32 * hard * hard) / (1 + i * 0.5))
+    })
+    // The same low note a little off, so that a ring swells and falls as it fades.
+    if (hard === 1) this.note(GONG_PITCH * 1.012, seconds, 0.2)
   }
 
   /* Noise through a filter that slides from one pitch to another. */

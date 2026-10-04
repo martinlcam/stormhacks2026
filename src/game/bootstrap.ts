@@ -100,6 +100,7 @@ export function bootstrap(
         () => game.discover('endless-stairwell'),
         puzzle('falling-faster'),
         puzzle('further-down'),
+        (strength) => sound.gong(strength),
       ),
     ]
 
