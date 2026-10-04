@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 import * as THREE from 'three'
-import { chargeLevel, throwSpeed } from '../src/game/items'
+import { aimMiss, chargeLevel, throwSpeed } from '../src/game/items'
 import { FACING, FRAME, door, floor, gem, linked, simulate } from './support'
 
 describe('Feature: gems fall, bounce and roll', () => {
@@ -110,6 +110,45 @@ describe('Feature: charging a throw', () => {
       }
 
       expect(land(throwSpeed(1))).toBeGreaterThan(land(throwSpeed(0)) * 2)
+    })
+  })
+})
+
+describe('Feature: picking up is forgiving', () => {
+  const eye = new THREE.Vector3(0, 1.6, 0)
+  const ahead = new THREE.Vector3(0, 0, -1)
+  const radius = 0.18
+  const reach = 3
+  const gemAt = (x: number, z: number) => new THREE.Vector3(x, 1.6, z)
+
+  describe('Scenario: the crosshair is near the gem but not on it', () => {
+    it('Given a gem 2 m ahead, when the crosshair is 20 cm clear of its edge, then I can still pick it up', () => {
+      expect(aimMiss(eye, ahead, gemAt(radius + 0.2, -2), radius, reach)).toBeLessThan(Infinity)
+    })
+
+    it('Given a gem 2 m ahead, when the crosshair is right on it, then it counts as a perfect aim', () => {
+      expect(aimMiss(eye, ahead, gemAt(0.1, -2), radius, reach)).toBe(0)
+    })
+
+    it('Given two gems in the margin, when one is closer to the crosshair, then that one is the better aim', () => {
+      const near = aimMiss(eye, ahead, gemAt(radius + 0.05, -2), radius, reach)
+      const far = aimMiss(eye, ahead, gemAt(-(radius + 0.2), -2), radius, reach)
+
+      expect(near).toBeLessThan(far)
+    })
+  })
+
+  describe('Scenario: the crosshair is nowhere near the gem', () => {
+    it('Given a gem 2 m ahead, when the crosshair is a metre to the side of it, then there is nothing to pick up', () => {
+      expect(aimMiss(eye, ahead, gemAt(1.2, -2), radius, reach)).toBe(Infinity)
+    })
+
+    it('Given a gem behind me, when I look ahead, then there is nothing to pick up', () => {
+      expect(aimMiss(eye, ahead, gemAt(0, 2), radius, reach)).toBe(Infinity)
+    })
+
+    it('Given a gem 5 m ahead, when I aim straight at it, then it is out of reach', () => {
+      expect(aimMiss(eye, ahead, gemAt(0, -5), radius, reach)).toBe(Infinity)
     })
   })
 })

@@ -21,8 +21,12 @@ const CHARGE_TIME = 1.2
 const THROW_LIFT = 0.12
 /* The aim ray may pass through this many portals. */
 const MAX_HOPS = 3
-/* Aiming is forgiving: items count as this much larger than they are. */
-const AIM_SLACK = 1.4
+/*
+  Aiming is forgiving. An item can be picked up when the crosshair is within
+  this angle of it (as a tangent: 0.14 is about 8 degrees), so the margin
+  around an item grows with its distance and looks the same size on screen.
+*/
+const AIM_MARGIN = 0.14
 
 /* How full the charge is, 0 to 1, after holding Q for this long. */
 export function chargeLevel(heldSeconds: number): number {
@@ -52,6 +56,7 @@ const point = new THREE.Vector3()
 const local = new THREE.Vector3()
 const localEnd = new THREE.Vector3()
 const offset = new THREE.Vector3()
+const toItem = new THREE.Vector3()
 const spin = new THREE.Vector3()
 const UP = new THREE.Vector3(0, 1, 0)
 
@@ -73,18 +78,25 @@ function rayBox(from: THREE.Vector3, dir: THREE.Vector3, box: THREE.Box3): numbe
   return near
 }
 
-/* Distance along a ray to where it enters a sphere, or Infinity. */
-function raySphere(
+/*
+  How far off the crosshair an item is, as the tangent of the angle between
+  the aim ray and the nearest part of the item. Zero means the crosshair is
+  on it. Infinity means it is behind the eye, out of reach, or outside the
+  aim margin.
+*/
+export function aimMiss(
   from: THREE.Vector3,
   dir: THREE.Vector3,
   centre: THREE.Vector3,
   radius: number,
+  reach: number,
 ): number {
   offset.subVectors(centre, from)
   const along = offset.dot(dir)
-  const missSq = offset.lengthSq() - along * along
-  if (along < 0 || missSq > radius * radius) return Infinity
-  return Math.max(0, along - Math.sqrt(radius * radius - missSq))
+  if (along <= 0 || along - radius > reach) return Infinity
+  const aside = Math.sqrt(Math.max(0, offset.lengthSq() - along * along))
+  const miss = Math.max(0, aside - radius) / along
+  return miss <= AIM_MARGIN ? miss : Infinity
 }
 
 /*
@@ -298,21 +310,38 @@ export class ItemSystem {
     origin.copy(eye)
     direction.copy(look)
     let reach = REACH * player.scale
+    // An item on this side of a doorway the crosshair is pointing into.
+    let beside: Item | null = null
 
     for (let hop = 0; hop <= MAX_HOPS; hop++) {
-      let nearest = reach
+      // The item closest to the crosshair that nothing solid is in front of.
+      let best = AIM_MARGIN
       let found: Item | null = null
+      let foundAt = Infinity
       for (const item of world.items) {
-        const t = raySphere(origin, direction, item.body.position, item.body.radius * AIM_SLACK)
-        if (t < nearest) {
-          nearest = t
-          found = item
+        const { position, radius } = item.body
+        const miss = aimMiss(origin, direction, position, radius, reach)
+        if (miss > best) continue
+        toItem.subVectors(position, origin)
+        const distance = toItem.length()
+        toItem.divideScalar(distance)
+        let clear = true
+        for (const box of world.colliders) {
+          if (rayBox(origin, toItem, box) < distance - radius) {
+            clear = false
+            break
+          }
         }
+        if (!clear) continue
+        best = miss
+        found = item
+        foundAt = distance
       }
+
       let wall = reach
       for (const box of world.colliders) wall = Math.min(wall, rayBox(origin, direction, box))
       let door: Portal | null = null
-      let doorAt = Math.min(nearest, wall)
+      let doorAt = wall
       for (const portal of world.portals) {
         const t = rayPortal(origin, direction, reach, portal)
         if (t < doorAt) {
@@ -321,16 +350,16 @@ export class ItemSystem {
         }
       }
 
-      if (door) {
-        // Carry on from the far side with whatever reach is left.
-        origin.addScaledVector(direction, doorAt).applyMatrix4(door.transform)
-        direction.transformDirection(door.transform)
-        reach = (reach - doorAt) * (door.target.scale / door.scale)
-        continue
-      }
-      return found && nearest <= wall ? found : null
+      // An item nearer than the doorway wins. Otherwise look through the
+      // doorway first, and come back to this one if nothing is there.
+      if (found && (!door || foundAt <= doorAt)) return found
+      if (!door) return beside
+      beside ??= found
+      origin.addScaledVector(direction, doorAt).applyMatrix4(door.transform)
+      direction.transformDirection(door.transform)
+      reach = (reach - doorAt) * (door.target.scale / door.scale)
     }
-    return null
+    return beside
   }
 
   private setPrompt(text: string | null) {
