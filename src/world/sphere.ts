@@ -21,7 +21,8 @@ export function onSphere(x: number, z: number, radius: number, out = new THREE.V
 /* The map point of a place, `height` metres above the ground. */
 export function onMap(place: THREE.Vector3, radius: number, height = 0, out = new THREE.Vector3()) {
   const flat = Math.hypot(place.x, place.z)
-  if (flat < 1e-9) return out.set(0, height, 0)
+  // Straight up is the pole. Straight down is the point opposite, which is the whole rim of the map.
+  if (flat < 1e-9) return out.set(place.y > 0 ? 0 : Math.PI * radius, height, 0)
   const d = Math.acos(Math.max(-1, Math.min(1, place.y))) * radius
   return out.set((place.x / flat) * d, height, (place.z / flat) * d)
 }

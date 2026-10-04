@@ -1,10 +1,13 @@
+import * as THREE from 'three'
+
 /*
   The look of the world. It is black and white, as old film is, until the
   player solves puzzles: each one puts a colour of the rainbow back, red
   first. The things a puzzle is made of are never quite grey: they keep
   half of their colour, and have all of it once their puzzle is solved. The
   dark parts of the picture carry film grain, and so, faintly, does anything
-  the player can pick up.
+  the player can pick up. Over all of it lies the grain of the paper that
+  the landing page is painted on.
 
   It is done at the end of every material's own shader and not in a pass
   over the finished picture, so that the portal renderer's stencil, scissor
@@ -37,6 +40,12 @@ const FRAMES_A_SECOND = 24
 const SHADOW_GRAIN = 0.09
 const ITEM_GRAIN = 0.035
 
+/* How strongly the paper's grain shows over the picture, and the average brightness of its image. */
+const PAPER = 0.5
+const PAPER_GREY = 0.567
+/* How many pixels across the image of the paper is. It is laid over the screen at that size. */
+const PAPER_SIZE = 1080
+
 /* The middle of each colour's share of the hues, and half its width. */
 export const BANDS = RAINBOW.map(([, from], i) => {
   const to = RAINBOW[(i + 1) % RAINBOW.length][1]
@@ -54,8 +63,27 @@ export const filmUniforms = {
   uFilmFrame: { value: 0 },
   /* How many pixels of the canvas one speck of grain covers. */
   uFilmSpeck: { value: 1 },
+  /* The grain of the paper the landing page is painted on, and 1 once it has loaded. */
+  uFilmPaper: { value: null as THREE.Texture | null },
+  uFilmPapered: { value: 0 },
   /* The least of its colour a material keeps. A puzzle's things have their own (see `keepColour`). */
   uFilmKeep: { value: 0 },
+}
+
+/*
+  Fetch the paper's grain. Until it arrives, and where there is no browser,
+  the picture is drawn without it.
+*/
+export function loadPaper() {
+  if (filmUniforms.uFilmPaper.value || typeof document === 'undefined') return
+  filmUniforms.uFilmPaper.value = new THREE.TextureLoader().load(
+    `${import.meta.env.BASE_URL}landing/grain.jpg`,
+    (paper) => {
+      paper.wrapS = paper.wrapT = THREE.RepeatWrapping
+      paper.needsUpdate = true
+      filmUniforms.uFilmPapered.value = 1
+    },
+  )
 }
 
 /* Each set of things that keep some colour: how much, and whether it is to be all of it. */
@@ -128,6 +156,8 @@ uniform float uFilmColours[${RAINBOW.length}];
 uniform float uFilmGrain;
 uniform float uFilmFrame;
 uniform float uFilmSpeck;
+uniform sampler2D uFilmPaper;
+uniform float uFilmPapered;
 uniform float uFilmKeep;
 
 float filmHue(vec3 c) {
@@ -157,6 +187,12 @@ ${BANDS.map(
   return mix(vec3(grey), c, clamp(max(keep, uFilmKeep), 0.0, 1.0));
 }
 
+// The paper's grain, laid over the screen: lighter and darker by the paper's own texture.
+vec3 filmPaper(vec3 c) {
+  float paper = texture2D(uFilmPaper, gl_FragCoord.xy / (${PAPER_SIZE}.0 * uFilmSpeck)).g;
+  return c * (1.0 + (paper - ${PAPER_GREY}) * ${PAPER} * uFilmPapered * uFilmGrain);
+}
+
 // Grain that is strongest in the dark and never weaker than \`least\`.
 vec3 filmGrain(vec3 c, float least) {
   vec3 p = fract(vec3(floor(gl_FragCoord.xy / uFilmSpeck), uFilmFrame).xyz * 0.1031);
@@ -172,7 +208,7 @@ vec3 filmGrain(vec3 c, float least) {
   goes to the screen. A material with FILM_ITEM defined is an item's.
 */
 export const FILM_GRADE = /* glsl */ `
-gl_FragColor.rgb = filmColour(gl_FragColor.rgb);
+gl_FragColor.rgb = filmPaper(filmColour(gl_FragColor.rgb));
 #ifdef FILM_ITEM
   gl_FragColor.rgb = filmGrain(gl_FragColor.rgb, ${ITEM_GRAIN});
 #else

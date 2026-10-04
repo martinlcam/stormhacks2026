@@ -20,24 +20,28 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 
 const assets = (path: string) => `${import.meta.env.BASE_URL}${path}`
 
+/*
+  A wood's colour, from a small image. It is kept small and the surface is
+  left flat, with no relief, so that timber reads as a plain painted face
+  and not as a photograph.
+*/
+function painted(folder: string): THREE.Texture {
+  const texture = new THREE.TextureLoader().load(assets(`textures/${folder}/diffuse.jpg`))
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping
+  texture.colorSpace = THREE.SRGBColorSpace
+  return texture
+}
+
 let wood: THREE.MeshStandardMaterial | undefined
 
 /* Aged timber. One copy of the texture covers half a metre. */
 export const WOOD_TILE = 0.5
 export function woodMaterial(): THREE.MeshStandardMaterial {
   if (wood) return wood
-  const load = (file: string, colour: boolean) => {
-    const texture = new THREE.TextureLoader().load(assets(`textures/rough_wood/${file}`))
-    texture.wrapS = texture.wrapT = THREE.RepeatWrapping
-    texture.anisotropy = 8
-    if (colour) texture.colorSpace = THREE.SRGBColorSpace
-    return texture
-  }
   wood = new THREE.MeshStandardMaterial({ color: 0x8a7458, roughness: 0.95 })
   if (canLoadImages()) {
     wood.color.set(0xffffff)
-    wood.map = load('diffuse.jpg', true)
-    wood.normalMap = load('normal.jpg', false)
+    wood.map = painted('rough_wood')
   }
   return wood
 }
@@ -50,16 +54,8 @@ export function plankMaterial(): THREE.MeshStandardMaterial {
   if (planks) return planks
   planks = new THREE.MeshStandardMaterial({ color: 0x6b5a4a, roughness: 0.95 })
   if (canLoadImages()) {
-    const load = (file: string, colour: boolean) => {
-      const texture = new THREE.TextureLoader().load(assets(`textures/old_planks_02/${file}`))
-      texture.wrapS = texture.wrapT = THREE.RepeatWrapping
-      texture.anisotropy = 8
-      if (colour) texture.colorSpace = THREE.SRGBColorSpace
-      return texture
-    }
     planks.color.set(0xffffff)
-    planks.map = load('diffuse.jpg', true)
-    planks.normalMap = load('normal.jpg', false)
+    planks.map = painted('old_planks_02')
   }
   return planks
 }

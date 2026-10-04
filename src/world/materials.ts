@@ -337,7 +337,7 @@ export class Sky {
           gl_FragColor = vec4(colour, 1.0);
           #include <colorspace_fragment>
           // The sky loses its colours with everything under it. It has grain of its own.
-          gl_FragColor.rgb = filmColour(gl_FragColor.rgb);
+          gl_FragColor.rgb = filmPaper(filmColour(gl_FragColor.rgb));
         }
       `,
     })

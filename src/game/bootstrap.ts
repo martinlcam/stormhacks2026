@@ -1,5 +1,5 @@
 import { Engine } from '../engine/Engine'
-import { RAINBOW, resetFilm, restoreColours } from '../engine/film'
+import { loadPaper, RAINBOW, resetFilm, restoreColours } from '../engine/film'
 import { PortalLighting } from '../engine/PortalLighting'
 import { World } from '../world/World'
 import { buildLightingLab } from '../world/lightingLab'
@@ -118,6 +118,7 @@ export function bootstrap(
     for (const structure of structures) world.build(structure)
   }
   resetFilm(lightingScene ? RAINBOW.length : solved(), !lightingScene)
+  loadPaper()
 
   const worldLamp = lightingLab ? undefined : addWorldLamp(world)
   const worldLantern = lightingLab ? undefined : addLantern(world, [-0.9, 0.4, 0.5], lanternTexture)
