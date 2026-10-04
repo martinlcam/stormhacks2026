@@ -163,44 +163,127 @@ export function glow(color: number, intensity = 1.6): THREE.MeshStandardMaterial
 }
 
 /*
-  A gradient sky drawn around whichever camera is rendering. It ignores the
-  camera's position, so it looks the same from every side of every portal.
+  The skies, each as three colours: overhead, part of the way down, and at
+  the horizon. The first two are the dusk and the storm from the landing
+  page; the rest are made in the same manner.
 */
-export function createSky(): THREE.Mesh {
-  const material = new THREE.ShaderMaterial({
-    side: THREE.BackSide,
-    depthWrite: false,
-    uniforms: {
-      top: { value: new THREE.Color(0x05030a) },
-      horizon: { value: new THREE.Color(0x3a1a52) },
-      uSkyUp: planetUniforms.uSkyUp,
-    },
-    vertexShader: /* glsl */ `
-      varying vec3 vDirection;
-      void main() {
-        vDirection = position;
-        // z = w pins the sky to the far plane. It must still be depth tested,
-        // or it would paint over the portal views sealed in front of it.
-        gl_Position = (projectionMatrix * vec4(mat3(viewMatrix) * position, 1.0)).xyww;
-      }
-    `,
-    fragmentShader: /* glsl */ `
-      uniform vec3 top;
-      uniform vec3 horizon;
-      uniform vec3 uSkyUp;
-      varying vec3 vDirection;
-      void main() {
-        // Height above the horizon of whoever is looking, wherever on the
-        // planet they stand.
-        float h = dot(normalize(vDirection), uSkyUp);
-        vec3 color = mix(horizon, top, smoothstep(-0.05, 0.6, h));
-        gl_FragColor = vec4(color, 1.0);
-        #include <colorspace_fragment>
-      }
-    `,
-  })
-  const sky = new THREE.Mesh(new THREE.SphereGeometry(50, 24, 12), material)
-  sky.renderOrder = -1000
-  sky.frustumCulled = false
-  return sky
+const SKIES = [
+  [0x1a1233, 0x623e84, 0xf2a7a0],
+  [0x0e1120, 0x26304e, 0x546488],
+  [0x1b0f1f, 0x7a2f4f, 0xf6b26b],
+  [0x071a2b, 0x1f5f7a, 0x9fe0c9],
+  [0x1c2242, 0x7d6aa8, 0xf7d9b0],
+  [0x05030a, 0x2a1340, 0x8a4aa0],
+].map((sky) => sky.map((colour) => new THREE.Color(colour)))
+
+/*
+  A sky drawn around whichever camera is rendering: a gradient from the
+  horizon up, broken by soft noise so that it reads as painted, not ruled.
+  It ignores the camera's position.
+
+  There are several skies, and every door leads to the next one. The view
+  through a door already shows the sky on its far side, so nothing changes
+  at the moment of going through: the sky you saw in the doorway is the sky
+  you are now under.
+*/
+export class Sky {
+  readonly mesh: THREE.Mesh
+  private readonly uniforms = {
+    top: { value: new THREE.Color() },
+    middle: { value: new THREE.Color() },
+    horizon: { value: new THREE.Color() },
+    /* Moves the noise, so that no two skies have the same clouds. */
+    seed: { value: 0 },
+    uSkyUp: planetUniforms.uSkyUp,
+  }
+
+  constructor() {
+    const material = new THREE.ShaderMaterial({
+      side: THREE.BackSide,
+      depthWrite: false,
+      uniforms: this.uniforms,
+      vertexShader: /* glsl */ `
+        varying vec3 vDirection;
+        void main() {
+          vDirection = position;
+          // z = w pins the sky to the far plane. It must still be depth tested,
+          // or it would paint over the portal views sealed in front of it.
+          gl_Position = (projectionMatrix * vec4(mat3(viewMatrix) * position, 1.0)).xyww;
+        }
+      `,
+      fragmentShader: /* glsl */ `
+        uniform vec3 top;
+        uniform vec3 middle;
+        uniform vec3 horizon;
+        uniform float seed;
+        uniform vec3 uSkyUp;
+        varying vec3 vDirection;
+
+        float hash(vec3 p) {
+          p = fract(p * 0.3183099 + 0.1);
+          p *= 17.0;
+          return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+        }
+        // Smooth noise from 0 to 1.
+        float noise(vec3 p) {
+          vec3 i = floor(p);
+          vec3 f = fract(p);
+          f = f * f * (3.0 - 2.0 * f);
+          return mix(
+            mix(mix(hash(i), hash(i + vec3(1, 0, 0)), f.x),
+                mix(hash(i + vec3(0, 1, 0)), hash(i + vec3(1, 1, 0)), f.x), f.y),
+            mix(mix(hash(i + vec3(0, 0, 1)), hash(i + vec3(1, 0, 1)), f.x),
+                mix(hash(i + vec3(0, 1, 1)), hash(i + vec3(1, 1, 1)), f.x), f.y),
+            f.z);
+        }
+        // Several sizes of noise laid over each other, large and soft first.
+        float clouds(vec3 p) {
+          float sum = 0.0;
+          float size = 0.5;
+          for (int i = 0; i < 4; i++) {
+            sum += noise(p) * size;
+            p = p * 2.03 + 7.1;
+            size *= 0.5;
+          }
+          return sum / 0.9375;
+        }
+
+        void main() {
+          vec3 direction = normalize(vDirection);
+          // Height above the horizon of whoever is looking, wherever on the
+          // planet they stand.
+          float h = dot(direction, uSkyUp);
+          // The noise pushes the bands of colour up and down, most near the horizon.
+          float drift = clouds(direction * 2.2 + seed) - 0.5;
+          h += drift * 0.35 * (1.0 - smoothstep(0.3, 0.9, abs(h)));
+          vec3 colour = mix(horizon, middle, smoothstep(-0.08, 0.3, h));
+          colour = mix(colour, top, smoothstep(0.2, 0.85, h));
+          // Lighter and darker patches, as in a wash of paint.
+          colour *= 0.9 + 0.2 * clouds(direction * 5.0 - seed);
+          // Fine grain, which also hides the steps in a smooth gradient.
+          colour += (hash(vec3(gl_FragCoord.xy, seed)) - 0.5) * 0.025;
+          gl_FragColor = vec4(colour, 1.0);
+          #include <colorspace_fragment>
+        }
+      `,
+    })
+    this.mesh = new THREE.Mesh(new THREE.SphereGeometry(50, 24, 12), material)
+    this.mesh.renderOrder = -1000
+    this.mesh.frustumCulled = false
+    this.show(0)
+  }
+
+  /*
+    Show the sky that is this many doors on from the first. `fog`, if given,
+    takes the colour of the horizon, so far things fade into the sky.
+  */
+  show(doors: number, fog?: THREE.Fog | THREE.FogExp2 | null) {
+    const index = ((doors % SKIES.length) + SKIES.length) % SKIES.length
+    const [top, middle, horizon] = SKIES[index]
+    this.uniforms.top.value.copy(top)
+    this.uniforms.middle.value.copy(middle)
+    this.uniforms.horizon.value.copy(horizon)
+    this.uniforms.seed.value = index * 13.7
+    fog?.color.copy(horizon)
+  }
 }

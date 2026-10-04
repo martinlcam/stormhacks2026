@@ -61,6 +61,8 @@ export class PlayerController {
   */
   scale = 1
   onGround = false
+  /* How many doors the player has gone through. */
+  doors = 0
   /* Where to put the player back if they fall out of the world. */
   readonly spawn = new THREE.Vector3()
   spawnYaw = 0
@@ -390,6 +392,7 @@ export class PlayerController {
       this.velocity.transformDirection(portal.transform).multiplyScalar(speed)
       // The door may turn the player onto a wall or the ceiling.
       this.site = portal.target.site
+      this.doors++
       const turned = reorient(this.axis, this.yaw, portal.transform)
       this.axis = turned.axis
       this.yaw = turned.yaw

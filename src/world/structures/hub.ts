@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import type { Structure } from '../World'
-import { createSky, glow, matte, palette, rockyGround } from '../materials'
+import { glow, matte, palette, rockyGround, Sky } from '../materials'
 
 /*
   Distance around the planet. Its radius is this / 2π, about 22 m, and the
@@ -50,7 +50,8 @@ export const hub: Structure = {
   name: 'hub',
   build(world) {
     world.scene.fog = new THREE.Fog(palette.night, 40, 140)
-    world.scene.add(createSky())
+    world.sky = new Sky()
+    world.scene.add(world.sky.mesh)
     world.scene.add(new THREE.HemisphereLight(0xcdb8ff, 0x1a1024, 1.1))
     const sun = new THREE.DirectionalLight(0xffffff, 1.4)
     sun.position.set(30, 60, 20)

@@ -51,6 +51,11 @@ export class PortalRenderer {
   maxPasses = 24
   /* What a portal looks like once the recursion budget runs out. */
   readonly depthLimitColor = new THREE.Color(0x120a1c)
+  /*
+    Called before the world is drawn for each view, with how many doors
+    the view looks through: 0 for the player's own.
+  */
+  beforePass?: (doors: number) => void
   /* Scene passes drawn last frame, for the debug HUD. */
   passes = 0
 
@@ -177,6 +182,7 @@ export class PortalRenderer {
     // 5. world
     for (const material of this.worldMaterials) material.stencilRef = level
     planetUniforms.uSkyUp.value.copy(up)
+    this.beforePass?.(level)
     this.renderer.render(scene, camera)
     this.passes++
 

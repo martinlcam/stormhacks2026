@@ -45,6 +45,9 @@ export class Engine {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     this.portalRenderer = new PortalRenderer(this.renderer)
     this.portalRenderer.setPortals(world.portals)
+    // The view through a door shows the sky that is under it on the far side.
+    this.portalRenderer.beforePass = (doors) =>
+      world.sky?.show(this.player.doors + doors, world.scene.fog)
     configurePlanet(world.planetSize)
     for (const portal of world.portals) portal.settle()
     this.player = new PlayerController(canvas)

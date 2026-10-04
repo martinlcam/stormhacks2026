@@ -4,6 +4,7 @@ import { type Axis, frameFor } from '../engine/gravity'
 import { assign, POLE, type Site } from '../engine/planet'
 import { Portal } from '../engine/Portal'
 import { overgrowth, WOOD_TILE, woodMaterial } from './foliage'
+import type { Sky } from './materials'
 
 type Vec3 = readonly [number, number, number]
 
@@ -121,6 +122,8 @@ export class World {
   readonly colliders: THREE.Box3[] = []
   readonly portals: Portal[] = []
   readonly items: Item[] = []
+  /* The sky, if the world has one. Every door leads to a different one. */
+  sky?: Sky
   /* Every site something is built on. */
   readonly sites: Site[] = [POLE]
   /* The site of the structure being built. */
