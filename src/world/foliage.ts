@@ -94,6 +94,56 @@ export function preloadFoliage() {
   void plants('shrub_sorrel_01')
 }
 
+/* Where one plant from a model file stands, in the frame of the group it grows in. */
+interface PlantSpot {
+  model: string
+  at: THREE.Vector3
+  size: number
+  /* Which version of the plant, from 0 to 1. */
+  pick: number
+  turn: number
+}
+
+/*
+  Add plants to a group once their models have arrived. They are joined
+  into one mesh for each material, since every mesh is a draw in every view
+  of the world, and a doorway has a dozen plants each made of several.
+*/
+function plantAll(group: THREE.Group, spots: readonly PlantSpot[]) {
+  if (!canLoadImages() || spots.length === 0) return
+  void Promise.all(spots.map((spot) => plants(spot.model))).then((loaded) => {
+    const parts = new Map<THREE.Material, THREE.BufferGeometry[]>()
+    loaded.forEach((versions, i) => {
+      const spot = spots[i]
+      const plant = versions[Math.floor(spot.pick * versions.length)].clone()
+      plant.position.copy(spot.at)
+      plant.rotation.y = spot.turn
+      plant.scale.setScalar(spot.size)
+      plant.updateMatrixWorld(true)
+      plant.traverse((object) => {
+        const mesh = object as THREE.Mesh
+        if (!mesh.isMesh || Array.isArray(mesh.material)) return
+        const list = parts.get(mesh.material) ?? []
+        list.push(mesh.geometry.clone().applyMatrix4(mesh.matrixWorld))
+        parts.set(mesh.material, list)
+      })
+    })
+
+    for (const [material, geometries] of parts) {
+      // Parts that cannot be joined are added as they are.
+      const merged = mergeGeometries(geometries)
+      for (const geometry of merged ? [merged] : geometries) {
+        const mesh = new THREE.Mesh(geometry, material)
+        // The stored bounds are not where a mesh on the planet is drawn.
+        mesh.frustumCulled = false
+        group.add(mesh)
+      }
+
+      if (merged) for (const geometry of geometries) geometry.dispose()
+    }
+  })
+}
+
 /* A repeatable stream of numbers from 0 to 1, so a door always grows the same way. */
 function seeded(text: string): () => number {
   let state = 2166136261
@@ -374,7 +424,7 @@ export function wallGrowth(name: string, size: readonly [number, number, number]
     colours: [],
     stems: [],
   }
-  const spots: { model: string; at: THREE.Vector3; size: number; pick: number; turn: number }[] = []
+  const spots: PlantSpot[] = []
   const front = 0.012
 
   // The four sides: how far the side is from the middle, how wide it is, and its turn.
@@ -430,21 +480,7 @@ export function wallGrowth(name: string, size: readonly [number, number, number]
   }
 
   const group = grown(growth)
-  if (canLoadImages()) {
-    for (const spot of spots) {
-      void plants(spot.model).then((versions) => {
-        const plant = versions[Math.floor(spot.pick * versions.length)].clone()
-        plant.position.copy(spot.at)
-        plant.rotation.y = spot.turn
-        plant.scale.setScalar(spot.size)
-        // The stored bounds are not where a mesh on the planet is drawn.
-        plant.traverse((object) => {
-          object.frustumCulled = false
-        })
-        group.add(plant)
-      })
-    }
-  }
+  plantAll(group, spots)
   group.traverse((object) => {
     object.frustumCulled = false
   })
@@ -493,22 +529,15 @@ function undergrowth(group: THREE.Group, { name, width, post }: Doorway) {
         size: between(2.5, 3.5),
       },
     ])
-    .map((spot) => ({ ...spot, pick: random(), turn: between(0, Math.PI * 2) }))
+    .map(({ model, x, z, size }) => ({
+      model,
+      at: new THREE.Vector3(x, 0, z),
+      size,
+      pick: random(),
+      turn: between(0, Math.PI * 2),
+    }))
 
-  if (!canLoadImages()) return
-  for (const spot of spots) {
-    void plants(spot.model).then((versions) => {
-      const plant = versions[Math.floor(spot.pick * versions.length)].clone()
-      plant.position.set(spot.x, 0, spot.z)
-      plant.rotation.y = spot.turn
-      plant.scale.setScalar(spot.size)
-      // The stored bounds are not where a mesh on the planet is drawn.
-      plant.traverse((object) => {
-        object.frustumCulled = false
-      })
-      group.add(plant)
-    })
-  }
+  plantAll(group, spots)
 }
 
 /*

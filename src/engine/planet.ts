@@ -143,6 +143,34 @@ export function onPlanet(point: THREE.Vector3): boolean {
   return planet.k > 0 && Math.hypot(point.x, point.z) <= planet.reach + 1
 }
 
+/* `ontoPlanet` in the vertex shader, done in place. */
+function ontoPlanet(p: THREE.Vector3) {
+  const d = Math.hypot(p.x, p.z)
+  if (d < 1e-5) return p
+  const theta = d * planet.k
+  const r = 1 / planet.k + p.y
+  const out = (r * Math.sin(theta)) / d
+  return p.set(p.x * out, r * Math.cos(theta) - 1 / planet.k, p.z * out)
+}
+
+/*
+  Move a bounding sphere in map coordinates to where the vertex shader draws
+  what it bounds, so it can be tested against a camera. `origin` is where
+  the object's own origin is on the map, which decides whether it is bent at
+  all, and `site` is the motion its material draws with.
+
+  The result still holds everything. The map keeps lengths straight up,
+  stretches lengths along the ground by at most (R + h) / R at height h, and
+  squeezes sideways ones by sin θ / θ on top of that, so no two points of the
+  sphere move apart by more than that factor at its highest point.
+*/
+export function drawnBounds(sphere: THREE.Sphere, origin: THREE.Vector3, site: THREE.Matrix4) {
+  if (planet.k === 0 || Math.hypot(origin.x, origin.z) > planet.reach + 1) return sphere
+  sphere.radius *= Math.max(1, 1 + (sphere.center.y + sphere.radius) * planet.k)
+  ontoPlanet(sphere.center).applyMatrix4(site)
+  return sphere
+}
+
 const PARS = /* glsl */ `
 uniform float uPlanetK;
 uniform float uPlanetReach;
