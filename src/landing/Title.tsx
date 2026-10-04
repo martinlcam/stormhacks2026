@@ -1,32 +1,13 @@
-import { INK, art } from './art'
+import { INK } from './art'
 
 /* Where the title's baseline is in the frame, which its reflection is mirrored about. */
 const BASELINE = 787
 
 /*
-  The two soft lights behind the title, green and yellow, placed as in the
-  Figma file. They fill the window, so they are cut off rather than shrunk
-  when its shape is not the frame's.
-*/
-export function TitleBackdrop() {
-  return (
-    <svg
-      viewBox="0 0 2160 1440"
-      preserveAspectRatio="xMidYMid slice"
-      className="absolute inset-0 block h-full w-full"
-      aria-hidden
-    >
-      <image href={art.gradientGreen} x={-378.95} y={-232.89} width={1807.38} height={1807.38} />
-      <g transform="translate(1471.96 779.85) rotate(162.44)">
-        <image href={art.gradientYellow} x={-845.3} y={-784.63} width={1643.52} height={1643.52} />
-      </g>
-    </svg>
-  )
-}
-
-/*
   "nullspace", its reflection fading below it, and what WÚ means. The
-  reflection is the word turned upside down about its baseline.
+  reflection is the word turned upside down about its baseline. The lights
+  behind it are drawn by the watercolour shader (`fx.ts`), so that they can
+  grow and join.
 */
 export function TitleText() {
   const type = { fontWeight: 700, fill: INK } as const

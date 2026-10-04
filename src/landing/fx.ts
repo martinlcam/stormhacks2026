@@ -2,15 +2,15 @@
   The watercolour on the landing page, drawn by one shader over the whole
   window:
 
-  1. #1: when the reader scrolls off the title, wet paper spreads over it
-     from a few places at once. The pigment it pushes collects at its front
-     in the title's greens and yellows, and then it dries to plain white.
+  1. The title, painted on a woven canvas. Its four lights, with the colours
+     of the Figma file, start as small blots at their centres and spread
+     like watercolour as the page is scrolled: uneven, darker at their wet
+     front, running together where they meet, with the heavy grain coming
+     in where the paint goes. Once they cover the page it all fades to white
+     (#1).
   2. #8: blue watercolour rises up the page from the bottom, uneven along
      its top and darker where it collects there, with light moving in it.
-  3. #10: once the drop lands, rings spread from where it fell, squashed
-     because the water is seen from the side, and small rings of rain come
-     and go on the water.
-  4. #9: after the button, the water covers everything and darkens to the
+  3. #9: after the button, the water covers everything and darkens to the
      night of the game.
 */
 
@@ -25,12 +25,13 @@ precision highp float;
 uniform vec2 uSize;
 uniform float uRatio;
 uniform float uTime;
-uniform float uDissolve;
+uniform float uBloom;
+uniform float uBloomAlpha;
+uniform vec4 uBox;
+uniform sampler2D uGrainTex;
+uniform float uGrain;
 uniform float uWash;
 uniform float uWaterTop;
-uniform float uRipple;
-uniform vec2 uCentre;
-uniform float uFrame;
 uniform float uFlood;
 uniform sampler2D uWater;
 uniform float uPainted;
@@ -66,32 +67,74 @@ vec4 over(vec4 top, vec4 under) {
   return top + under * (1.0 - top.a);
 }
 
-// 1. Wet paper spreading over the title. q has a height of one; uv runs 0 to 1 both ways.
-vec4 dissolve(vec2 q, vec2 uv) {
-  float aspect = uSize.x / uSize.y;
-  float covered = 0.0;
-  float front = 0.0;
-  for (int i = 0; i < 5; i++) {
-    float k = float(i);
-    vec2 seed = vec2(hash(vec2(k, 1.0)) * aspect, hash(vec2(k, 2.0)));
-    float delay = hash(vec2(k, 3.0)) * 0.3;
-    // By the end every patch reaches past the far corner of the window.
-    float reach = clamp((uDissolve - delay) / (1.0 - delay), 0.0, 1.0) * (aspect + 1.6);
-    float d = length(q - seed) + (fbm(q * 3.0 + k * 7.0) - 0.5) * 0.5 + (fbm(q * 15.0 + k) - 0.5) * 0.06;
-    float f = reach - d;
-    covered = max(covered, smoothstep(0.0, 0.03, f));
-    front = max(front, smoothstep(-0.004, 0.01, f) * (1.0 - smoothstep(0.01, 0.08, f)));
-  }
-  float dry = smoothstep(0.7, 1.0, uDissolve);
-  vec3 pigment = mix(vec3(0.52, 0.66, 0.28), vec3(0.94, 0.8, 0.26), smoothstep(0.25, 0.85, uv.x));
-  float tint = front * 0.6 * (1.0 - dry);
-  vec3 paper = vec3(1.0 - 0.04 * (1.0 - dry) * fbm(q * 40.0));
-  float a = max(covered, tint);
-  vec3 c = mix(paper, pigment, tint / max(a, 0.001));
-  return vec4(c * a, a);
+float smin(float a, float b, float k) {
+  float h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0);
+  return mix(b, a, h) - k * h * (1.0 - h);
 }
 
-// 2 to 4. The water, its rings and the flood. px is in CSS pixels from the top left.
+// The canvas the title is painted on: warm white, woven, with long fibres in both directions.
+vec3 canvasGround(vec2 px) {
+  float weave = sin(px.x * 1.9) * sin(px.y * 1.9);
+  float fibres = (noise(vec2(px.x * 0.9, px.y * 0.06)) + noise(vec2(px.x * 0.06, px.y * 0.9))) * 0.5;
+  float shade = 1.0 + 0.018 * weave + 0.035 * (fibres - 0.5) + 0.03 * (fbm(px * 0.01) - 0.5);
+  return vec3(0.975, 0.968, 0.95) * shade;
+}
+
+// One light of the title, in frame pixels: how far outside its edge the point is, once the
+// edge has been made uneven by \`warp\` and \`fringe\`, and its premultiplied colour there. The
+// colour is a gradient between two points, and like the edge it grows by s about the centre.
+vec4 pigment(vec2 f, vec2 centre, float radius, vec2 from, vec4 c0, vec2 to, vec4 c1, float opacity, float s, vec2 warp, float fringe, out float d) {
+  d = length(f + warp - centre) - radius * s + fringe;
+  vec2 a = centre + (from - centre) * s;
+  vec2 b = centre + (to - centre) * s;
+  vec2 ab = b - a;
+  float t = clamp(dot(f - a, ab) / dot(ab, ab), 0.0, 1.0);
+  return mix(vec4(c0.rgb * c0.a, c0.a), vec4(c1.rgb * c1.a, c1.a), t) * opacity;
+}
+
+// 1. The title. Its lights' centres, sizes, gradients and opacities are the Figma file's.
+vec4 title(vec2 px) {
+  vec2 f = (px - uBox.xy) / uBox.zw * vec2(2160.0, 1440.0);
+  float s = uBloom;
+  // Watercolour never spreads in circles: the paper pulls it further one way than another.
+  vec2 warp = (vec2(fbm(f * 0.003 + 1.3), fbm(f * 0.003 + 8.6)) - 0.5) * 300.0 * s;
+  float fringe = (fbm(f * 0.02) - 0.5) * 24.0 * min(s, 1.5);
+  float d1; float d2; float d3; float d4;
+  vec4 p1 = pigment(f, vec2(524.74, 670.8), 703.69, vec2(524.74, -32.89), vec4(0.114, 0.247, 0.0, 1.0), vec2(524.74, 1374.49), vec4(0.804, 0.941, 0.459, 0.46), 0.64, s, warp, fringe, d1);
+  vec4 p2 = pigment(f, vec2(766.74, 397.91), 514.9, vec2(766.74, -116.99), vec4(0.6, 1.0, 0.224, 1.0), vec2(766.74, 912.8), vec4(0.584, 0.745, 0.58, 0.0), 0.81, s, warp, fringe, d2);
+  vec4 p3 = pigment(f, vec2(1483.2, 737.35), 621.76, vec2(1670.78, 1330.14), vec4(0.961, 0.773, 0.153, 1.0), vec2(1295.61, 144.57), vec4(0.961, 0.933, 0.114, 0.46), 0.64, s, warp, fringe, d3);
+  vec4 p4 = pigment(f, vec2(1352.09, 1031.74), 454.95, vec2(1489.35, 1465.49), vec4(1.0, 0.867, 0.0, 1.0), vec2(1214.84, 598.0), vec4(0.584, 0.745, 0.58, 0.0), 0.81, s, warp, fringe, d4);
+
+  // Wet washes that meet run into one: one edge round them all, the colour of the nearest.
+  float k = 220.0 * s;
+  float inside = -smin(smin(d1, d2, k), smin(d3, d4, k), k);
+  float reach = 180.0 * s + 12.0;
+  float w1 = exp(-clamp(d1, -3.0 * reach, 6.0 * reach) / reach);
+  float w2 = exp(-clamp(d2, -3.0 * reach, 6.0 * reach) / reach);
+  float w3 = exp(-clamp(d3, -3.0 * reach, 6.0 * reach) / reach);
+  float w4 = exp(-clamp(d4, -3.0 * reach, 6.0 * reach) / reach);
+  vec4 paint = (p1 * w1 + p2 * w2 + p3 * w3 + p4 * w4) / (w1 + w2 + w3 + w4);
+  vec3 hue = paint.rgb / max(paint.a, 0.001);
+
+  // A crisp front, a dark line where the pigment has collected at it, and paler blooms behind.
+  float feather = 2.0 + 4.0 * min(s, 1.5);
+  float painted = smoothstep(-feather, feather, inside);
+  float collected = smoothstep(0.0, 4.0, inside) * (1.0 - smoothstep(4.0, 26.0 + 30.0 * min(s, 1.0), inside));
+  float blooms = 0.85 + 0.3 * fbm(f * 0.006 + 2.0);
+  float settled = 0.88 + 0.24 * noise(px * 0.7);
+  float density = clamp(paint.a * painted * blooms * settled * (1.0 + 0.6 * collected), 0.0, 0.95);
+
+  // The grain comes in with the paint, under it, as it is in the Figma file.
+  float side = max(uSize.x, uSize.y);
+  vec3 grain = texture2D(uGrainTex, (px + (vec2(side) - uSize) * 0.5) / side).rgb;
+  vec3 ground = mix(canvasGround(px), grain, uGrain * painted);
+
+  // The paint lies over the grain as the Figma file's lights do, darker where it collected.
+  vec3 colour = mix(ground, hue * (1.0 - 0.25 * collected), density);
+  return vec4(mix(vec3(1.0), colour, uBloomAlpha), 1.0);
+}
+
+// 2 and 3. The water and the flood. px is in CSS pixels from the top left.
 vec4 water(vec2 px, vec2 q, vec2 uv) {
   float top = uWaterTop / uSize.y;
   float level = mix(1.02, top, uWash);
@@ -129,34 +172,6 @@ vec4 water(vec2 px, vec2 q, vec2 uv) {
   float web = 1.0 - smoothstep(0.0, 0.015, abs(fbm(q * 6.0 + vec2(uTime * 0.04, -uTime * 0.03)) - 0.5));
   c += vec3(0.9, 0.95, 1.0) * (glints * 0.18 + web * 0.03);
 
-  if (uRipple >= 0.0) {
-    // Rings from where the drop fell, measured in frame heights.
-    vec2 d = (px - uCentre) / uFrame;
-    d.y /= 0.3;
-    float r = length(d);
-    float rings = 0.0;
-    for (int k = 0; k < 4; k++) {
-      float t = uRipple - float(k) * 0.24;
-      if (t > 0.0) {
-        float edge = r - t * 0.2;
-        float fade = exp(-t * 0.8);
-        rings += exp(-(edge * edge) / 0.00006) * fade;
-        rings -= 0.5 * exp(-((edge + 0.014) * (edge + 0.014)) / 0.00006) * fade;
-      }
-    }
-
-    // Rain on the water: small rings that come and go.
-    vec2 cells = vec2(q.x * 8.0, q.y * 16.0);
-    vec2 id = floor(cells);
-    float seed = hash(id);
-    float phase = fract(uTime * 0.4 + seed * 7.0);
-    vec2 local = fract(cells) - 0.5 - (vec2(hash(id + 3.0), hash(id + 5.0)) - 0.5) * 0.4;
-    float ring = abs(length(local) - phase * 0.42);
-    float rain = (1.0 - smoothstep(0.0, 0.035, ring)) * (1.0 - phase) * step(0.6, seed);
-    rain *= smoothstep(0.0, 1.5, uRipple) * smoothstep(0.02, 0.08, depth);
-    c += vec3(0.88, 0.94, 1.0) * (rings * 0.4 + rain * 0.18);
-  }
-
   float a = covered * mix(0.6, 0.9, deep);
   c = mix(c, vec3(0.071, 0.039, 0.11), smoothstep(0.5, 1.0, uFlood));
   a = mix(a, covered, smoothstep(0.2, 0.8, uFlood));
@@ -168,7 +183,7 @@ void main() {
   vec2 uv = px / uSize;
   vec2 q = px / uSize.y;
   vec4 colour = vec4(0.0);
-  if (uDissolve > 0.0 && uDissolve < 1.0) colour = dissolve(q, uv);
+  if (uBloomAlpha > 0.0) colour = title(px);
   if (uWash > 0.0 || uFlood > 0.0) colour = over(water(px, q, uv), colour);
   gl_FragColor = colour;
 }`
@@ -176,18 +191,18 @@ void main() {
 export interface FxFrame {
   /* Seconds, for what moves by itself. */
   time: number
-  /* 0 to 1: the wet paper spreading over the title. */
-  dissolve: number
+  /* How large the title's lights are, as a multiple of their size in the Figma file. */
+  bloom: number
+  /* How much of the lights' colour shows, 0 to 1: it fades to white at the end of the title. */
+  bloomAlpha: number
+  /* The scaled Figma frame in CSS pixels: left, top, width and height. */
+  box: readonly [number, number, number, number]
+  /* How strong the grain is where the title's paint has spread, 0 for none. */
+  grain: number
   /* 0 to 1: the water rising to its line. */
   wash: number
   /* Where the top of the water is once it has risen, in CSS pixels from the top. */
   waterTop: number
-  /* Seconds since the drop hit the water, or -1 before. */
-  ripple: number
-  /* Where the rings spread from, in CSS pixels from the top left. */
-  centre: readonly [number, number]
-  /* The height of the scaled Figma frame in CSS pixels, which the rings are sized by. */
-  frame: number
   /* 0 to 1: the water covering everything on the way into the game. */
   flood: number
 }
@@ -214,8 +229,15 @@ function compile(gl: WebGLRenderingContext, type: number, source: string): WebGL
   return shader
 }
 
-/* Draws the watercolour into `canvas`. `water` is the blue texture to paint the water from, if any. */
-export function createFx(canvas: HTMLCanvasElement, water: string | null): Fx {
+/*
+  Draws the watercolour into `canvas`. `textures.water` is the blue texture to
+  paint the water from and `textures.grain` the grain for the title's paint,
+  if any.
+*/
+export function createFx(
+  canvas: HTMLCanvasElement,
+  textures: { water: string | null; grain: string | null },
+): Fx {
   const gl = canvas.getContext('webgl', { alpha: true, premultipliedAlpha: true, antialias: false })
   if (!gl) return { ok: false, resize() {}, render() {}, dispose() {} }
 
@@ -237,31 +259,48 @@ export function createFx(canvas: HTMLCanvasElement, water: string | null): Fx {
     size: uniform('uSize'),
     ratio: uniform('uRatio'),
     time: uniform('uTime'),
-    dissolve: uniform('uDissolve'),
+    bloom: uniform('uBloom'),
+    bloomAlpha: uniform('uBloomAlpha'),
+    box: uniform('uBox'),
     wash: uniform('uWash'),
     waterTop: uniform('uWaterTop'),
-    ripple: uniform('uRipple'),
-    centre: uniform('uCentre'),
-    frame: uniform('uFrame'),
     flood: uniform('uFlood'),
     painted: uniform('uPainted'),
+    grain: uniform('uGrain'),
   }
 
-  // The blue texture, once it has loaded. Until then the water is painted plain.
-  let painted = false
-  const texture = gl.createTexture()
-  if (water) {
+  // The textures, once they have loaded: the blue for the water on unit 0, the grain on unit 1.
+  // Until then the water is painted plain and the paint has no grain.
+  const loaded = { water: false, grain: false }
+  const waterTexture = gl.createTexture()
+  const grainTexture = gl.createTexture()
+  const load = (src: string, unit: number, texture: WebGLTexture, done: () => void) => {
     const image = new Image()
     image.onload = () => {
+      gl.activeTexture(gl.TEXTURE0 + unit)
       gl.bindTexture(gl.TEXTURE_2D, texture)
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, image)
-      painted = true
+      done()
     }
-    image.src = water
+    image.src = src
+  }
+
+  gl.uniform1i(uniform('uWater'), 0)
+  gl.uniform1i(uniform('uGrainTex'), 1)
+  if (textures.water) {
+    load(textures.water, 0, waterTexture, () => {
+      loaded.water = true
+    })
+  }
+
+  if (textures.grain) {
+    load(textures.grain, 1, grainTexture, () => {
+      loaded.grain = true
+    })
   }
 
   let w = 0
@@ -291,21 +330,22 @@ export function createFx(canvas: HTMLCanvasElement, water: string | null): Fx {
       gl.uniform2f(u.size, w, h)
       gl.uniform1f(u.ratio, canvas.width / Math.max(1, w))
       gl.uniform1f(u.time, frame.time)
-      gl.uniform1f(u.dissolve, frame.dissolve)
+      gl.uniform1f(u.bloom, frame.bloom)
+      gl.uniform1f(u.bloomAlpha, frame.bloomAlpha)
+      gl.uniform4f(u.box, frame.box[0], frame.box[1], frame.box[2], frame.box[3])
       gl.uniform1f(u.wash, frame.wash)
       gl.uniform1f(u.waterTop, frame.waterTop)
-      gl.uniform1f(u.ripple, frame.ripple)
-      gl.uniform2f(u.centre, frame.centre[0], frame.centre[1])
-      gl.uniform1f(u.frame, frame.frame)
       gl.uniform1f(u.flood, frame.flood)
-      gl.uniform1f(u.painted, painted ? 1 : 0)
+      gl.uniform1f(u.painted, loaded.water ? 1 : 0)
+      gl.uniform1f(u.grain, loaded.grain ? frame.grain : 0)
       gl.drawArrays(gl.TRIANGLES, 0, 3)
     },
     // The context goes with its canvas. Losing it here would break a canvas that React keeps
     // and hands to the next effect, as it does when the page is reloaded in place.
     dispose() {
       gl.deleteProgram(program)
-      gl.deleteTexture(texture)
+      gl.deleteTexture(waterTexture)
+      gl.deleteTexture(grainTexture)
     },
   }
 }

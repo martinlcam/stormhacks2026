@@ -22,8 +22,18 @@ import { createFx } from './fx'
 import { holdScroll } from './hold'
 import { type LandingSound, createLandingSound } from './sound'
 import { type Speedraw, createSpeedraw } from './speedraw'
-import { DROP_X, FRAME, TRACK_HEIGHTS, beat, dropAt, linear, ramp, splashAt } from './timeline'
-import { TitleBackdrop, TitleText } from './Title'
+import {
+  DROP_X,
+  FRAME,
+  TRACK_HEIGHTS,
+  beat,
+  bloomAt,
+  dropAt,
+  linear,
+  ramp,
+  splashAt,
+} from './timeline'
+import { TitleText } from './Title'
 
 /* How long the page takes to scroll itself through the story when asked to. */
 const AUTO_SECONDS = 45
@@ -33,9 +43,8 @@ const TAKE_OVER = ['wheel', 'touchstart', 'keydown', 'pointerdown'] as const
 const LEAVE_SECONDS = 1.6
 /* How far the last caption rises to reach the middle of the frame (#8), in frame pixels. */
 const LAST_CAPTION_RISE = 600
-/* The button's type size and the ring it comes in with, in frame pixels. */
+/* The button's type size, in frame pixels. */
 const BUTTON_SIZE = 44
-const RING_WIDTH = 560
 
 const speedraw = readFlag('draw') === 'speedraw'
 const glows = readFlag('glow') === 'on'
@@ -96,7 +105,6 @@ export function Landing({ onEnter }: { onEnter: () => void }) {
   const splashes = useRef<(HTMLImageElement | null)[]>([])
   const captions = useRef<(HTMLParagraphElement | null)[]>([])
   const button = useRef<HTMLButtonElement>(null)
-  const ring = useRef<HTMLDivElement>(null)
   const pageGrain = useRef<HTMLDivElement>(null)
   const hint = useRef<HTMLParagraphElement>(null)
   const rail = useRef<HTMLDivElement>(null)
@@ -106,7 +114,10 @@ export function Landing({ onEnter }: { onEnter: () => void }) {
 
   useEffect(() => {
     const track = scroller.current!
-    const fx = createFx(fxCanvas.current!, paintedWater ? art.water : null)
+    const fx = createFx(fxCanvas.current!, {
+      water: paintedWater ? art.water : null,
+      grain: grainy ? art.grain : null,
+    })
     const draws: [Speedraw, Speedraw] | null = speedraw
       ? [
           createSpeedraw(deskParts.lines.current!, desk.lines),
@@ -193,16 +204,17 @@ export function Landing({ onEnter }: { onEnter: () => void }) {
       drawn = p
 
       const leave = leftAt === null ? 0 : linear(0, LEAVE_SECONDS, seconds - leftAt)
-      const dissolve = beat('dissolve', p)
+      const bloom = bloomAt(p)
+      const titleFade = beat('titleFade', p)
       const splash = splashAt(p)
       const deskShown = beat('deskIn', p) * (1 - beat('deskOut', p))
       const lightShown = beat('lightIn', p) * (1 - beat('lightOut', p))
 
-      // The title, until the wet paper has covered it (#1).
-      title.current!.style.visibility = dissolve >= 1 ? 'hidden' : 'visible'
-      if (!fx.ok) title.current!.style.opacity = String(1 - dissolve)
+      // The title, and its heavy grain, until they fade to the white paper of the drawings (#1).
+      title.current!.style.opacity = String(1 - titleFade)
+      title.current!.style.visibility = titleFade >= 1 ? 'hidden' : 'visible'
       hint.current!.style.opacity = String(1 - beat('hint', p))
-      if (pageGrain.current) pageGrain.current.style.opacity = String(PAGE_GRAIN * dissolve)
+      if (pageGrain.current) pageGrain.current.style.opacity = String(PAGE_GRAIN * titleFade)
 
       // The two drawings (#2, #3, #5) and their gems (#6).
       showSlide(
@@ -253,20 +265,18 @@ export function Landing({ onEnter }: { onEnter: () => void }) {
       button.current!.style.transform = `translate(-50%, -50%) scale(${0.85 + 0.15 * splash.button})`
       button.current!.style.pointerEvents = ready ? 'auto' : 'none'
       button.current!.disabled = !ready
-      ring.current!.style.opacity = String(splash.button > 0 ? (1 - splash.button) * 0.9 : 0)
-      ring.current!.style.transform = `translate(-50%, -50%) scale(${0.3 + 2.4 * splash.button})`
 
-      const painting = (dissolve > 0 && dissolve < 1) || wash > 0 || leave > 0
+      const painting = bloom.alpha > 0 || wash > 0 || leave > 0
       fx.render(
         painting
           ? {
               time: seconds,
-              dissolve,
+              bloom: bloom.scale,
+              bloomAlpha: bloom.alpha,
+              box: [box.x, box.y, box.w, box.h],
+              grain: TITLE_GRAIN,
               wash,
               waterTop: box.y + WATER_LINE * scale,
-              ripple: splash.ripple,
-              centre: [box.x + SPLASH_CENTRE.x * scale, box.y + SPLASH_CENTRE.y * scale],
-              frame: box.h,
               flood: leave,
             }
           : null,
@@ -314,21 +324,24 @@ export function Landing({ onEnter }: { onEnter: () => void }) {
           className="sticky top-0 h-dvh overflow-hidden bg-white select-none"
           style={{ fontFamily: FONT }}
         >
-          {/* The title: grain under the two lights, as in the Figma file, and the words over them. */}
-          <div ref={title} className="absolute inset-0">
-            {grainy && <Grain opacity={TITLE_GRAIN} />}
-            <TitleBackdrop />
-            <div ref={titleFrame} className="absolute">
-              <TitleText />
-            </div>
-          </div>
-
+          {/* The title's canvas and paint, with the grain that comes in with the paint, and later the water. */}
           <canvas
             ref={fxCanvas}
             className="pointer-events-none absolute inset-0 block h-full w-full"
           />
 
-          {/* Nothing here may start a stacking context, or the drawings would not multiply onto the water. */}
+          <div ref={title} className="pointer-events-none absolute inset-0">
+            <div ref={titleFrame} className="absolute">
+              <TitleText />
+            </div>
+          </div>
+
+          {/*
+            The drawings are paper multiplied onto the white page. They never sit over
+            the canvas while it is painting, because browsers do not always blend an
+            image onto a WebGL canvas. The drop and the splash are pencil on nothing,
+            so they need no blending and can go over the water.
+          */}
           <div ref={frame} className="absolute">
             <SlideArt slide={desk} parts={deskParts} />
             <SlideArt slide={lightSlide} parts={lightParts} />
@@ -342,7 +355,7 @@ export function Landing({ onEnter }: { onEnter: () => void }) {
                 src={src}
                 alt=""
                 draggable={false}
-                className="absolute max-w-none mix-blend-multiply"
+                className="absolute max-w-none"
                 style={{
                   left: percent(DROP_X - DROP_SPRITE.w / 2, FRAME.w),
                   width: percent(DROP_SPRITE.w, FRAME.w),
@@ -361,7 +374,7 @@ export function Landing({ onEnter }: { onEnter: () => void }) {
                 src={src}
                 alt=""
                 draggable={false}
-                className="absolute max-w-none mix-blend-multiply"
+                className="absolute max-w-none"
                 style={{ ...place(SPLASH_RECT), visibility: 'hidden' }}
               />
             ))}
@@ -388,19 +401,6 @@ export function Landing({ onEnter }: { onEnter: () => void }) {
                 {text}
               </p>
             ))}
-
-            <div
-              ref={ring}
-              className="pointer-events-none absolute rounded-[50%]"
-              style={{
-                left: percent(SPLASH_CENTRE.x, FRAME.w),
-                top: percent(SPLASH_CENTRE.y, FRAME.h),
-                width: percent(RING_WIDTH, FRAME.w),
-                aspectRatio: '3.2 / 1',
-                border: '2px solid rgba(255,255,255,0.85)',
-                opacity: 0,
-              }}
-            />
 
             <button
               ref={button}
@@ -479,7 +479,7 @@ function Grain({ opacity, ref }: { opacity: number; ref?: Ref<HTMLDivElement> })
 /*
   One drawing, with its gem on a layer of its own over a warm wash and a
   white light. The whole drawing is multiplied onto the page like paint, so
-  the white of the paper drops away and the drop shows through it.
+  the white of its paper drops away.
 */
 function SlideArt({ slide, parts }: { slide: Slide; parts: SlideParts }) {
   const { root, colour, lines, halo, bloom, gem: gemLayer } = parts
