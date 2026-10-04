@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import type { Structure } from '../World'
-import { glow, matte, palette } from '../materials'
+import { glow, palette } from '../materials'
 
 /* Where the sculpture stands in the plaza, and how high its middle is. */
 const X = 5
@@ -47,7 +47,7 @@ export function sculpture(onFind: () => void): Structure {
       world.addBox({
         size: [1.2, PLINTH, 1.2],
         position: [X, PLINTH / 2, Z],
-        material: matte(palette.stone),
+        overgrown: true,
       })
 
       const group = new THREE.Group()

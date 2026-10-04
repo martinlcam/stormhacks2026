@@ -10,6 +10,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
     wood     "Rough Wood" texture, Poly Haven, CC0 (Rob Tuytel)
     ferns    "Fern 02" model, Poly Haven, CC0 (Rob Tuytel, Rico Cilliers)
     sorrel   "Shrub Sorrel 01" model, Poly Haven, CC0 (Rico Cilliers)
+    stone    "Castle Wall Slates" texture, Poly Haven, CC0 (Rob Tuytel)
     ivy      photographed leaves from "Leaf Set 017", ambientCG, CC0, set
              on stems that are grown here: up the posts, along the top and
              hanging down into the opening
@@ -38,6 +39,28 @@ export function woodMaterial(): THREE.MeshStandardMaterial {
     roughness: 0.95,
   })
   return wood
+}
+
+let stone: THREE.MeshStandardMaterial | undefined
+
+/* An old wall of stacked slate. One copy of the texture covers 2.5 m. */
+export const STONE_TILE = 2.5
+export function stoneMaterial(): THREE.MeshStandardMaterial {
+  if (stone) return stone
+  stone = new THREE.MeshStandardMaterial({ color: 0x9a9088, roughness: 0.95 })
+  if (canLoadImages()) {
+    const load = (file: string, colour: boolean) => {
+      const texture = new THREE.TextureLoader().load(assets(`textures/castle_wall_slates/${file}`))
+      texture.wrapS = texture.wrapT = THREE.RepeatWrapping
+      texture.anisotropy = 8
+      if (colour) texture.colorSpace = THREE.SRGBColorSpace
+      return texture
+    }
+    stone.color.set(0xffffff)
+    stone.map = load('diffuse.jpg', true)
+    stone.normalMap = load('normal.jpg', false)
+  }
+  return stone
 }
 
 const loader = new GLTFLoader()
@@ -93,6 +116,8 @@ const lean = new THREE.Euler()
 const corner = new THREE.Vector3()
 
 interface Growth {
+  /* Carries what is grown from the frame it is worked out in to where it goes. */
+  place: THREE.Matrix4
   leaves: number[]
   uvs: number[]
   colours: number[]
@@ -127,7 +152,7 @@ function addLeaf(
   ]
   for (const index of [0, 1, 2, 0, 2, 3]) {
     const [x, y, px, py] = card[index]
-    corner.set(x, y, 0).applyQuaternion(turn).add(at)
+    corner.set(x, y, 0).applyQuaternion(turn).add(at).applyMatrix4(growth.place)
     growth.leaves.push(corner.x, corner.y, corner.z)
     growth.uvs.push(px / ATLAS, 1 - py / ATLAS)
     // The photographs are pale; bring them towards a deeper green.
@@ -188,7 +213,11 @@ function addVine(
 ) {
   const curve = new THREE.CatmullRomCurve3(points)
   const length = curve.getLength()
-  growth.stems.push(new THREE.TubeGeometry(curve, Math.max(4, Math.ceil(length / 0.08)), 0.008, 6))
+  growth.stems.push(
+    new THREE.TubeGeometry(curve, Math.max(4, Math.ceil(length / 0.08)), 0.008, 6).applyMatrix4(
+      growth.place,
+    ),
+  )
   const count = Math.max(2, Math.floor(length / options.spacing))
   const at = new THREE.Vector3()
   for (let i = 0; i <= count; i++) {
@@ -217,7 +246,13 @@ export interface Doorway {
 */
 export function ivy({ name, width, height, post }: Doorway): THREE.Group {
   const random = seeded(name)
-  const growth: Growth = { leaves: [], uvs: [], colours: [], stems: [] }
+  const growth: Growth = {
+    place: new THREE.Matrix4(),
+    leaves: [],
+    uvs: [],
+    colours: [],
+    stems: [],
+  }
   const half = width / 2
   const front = 0.012
   const between = (a: number, b: number) => a + (b - a) * random()
@@ -288,6 +323,13 @@ export function ivy({ name, width, height, post }: Doorway): THREE.Group {
     addVine(growth, points, random, { spacing: 0.055, leaf: 0.075, spread: 0.035 })
   }
 
+  return grown(growth)
+}
+
+/* The leaves and stems of a growth, as two meshes in one group. */
+function grown(growth: Growth): THREE.Group {
+  const group = new THREE.Group()
+  if (growth.stems.length === 0) return group
   const leafGeometry = new THREE.BufferGeometry()
   leafGeometry.setAttribute('position', new THREE.Float32BufferAttribute(growth.leaves, 3))
   leafGeometry.setAttribute('uv', new THREE.Float32BufferAttribute(growth.uvs, 2))
@@ -295,8 +337,107 @@ export function ivy({ name, width, height, post }: Doorway): THREE.Group {
   leafGeometry.computeVertexNormals()
   const leaves = new THREE.Mesh(leafGeometry, ivyLeafMaterial())
   const stems = new THREE.Mesh(mergeGeometries(growth.stems), ivyStemMaterial())
-  const group = new THREE.Group()
   group.add(stems, leaves)
+  return group
+}
+
+/* A wall narrower than this grows nothing; one at least `PLANTED` wide has plants at its foot. */
+const BARE = 0.5
+const PLANTED = 2
+/* Ivy climbs no higher than this. */
+const CLIMB = 4.5
+
+/*
+  Ivy and plants for an upright box, in the box's own frame: the origin is
+  the middle of its base. Ivy climbs each of the four sides from the ground,
+  thick at the foot, and ferns and sorrel grow at the foot of the wide
+  sides. All of a box's ivy is two meshes, however many sides it has.
+*/
+export function wallGrowth(name: string, size: readonly [number, number, number]): THREE.Group {
+  const random = seeded(name)
+  const between = (a: number, b: number) => a + (b - a) * random()
+  const [width, height, depth] = size
+  const growth: Growth = {
+    place: new THREE.Matrix4(),
+    leaves: [],
+    uvs: [],
+    colours: [],
+    stems: [],
+  }
+  const spots: { model: string; at: THREE.Vector3; size: number; pick: number; turn: number }[] = []
+  const front = 0.012
+
+  // The four sides: how far the side is from the middle, how wide it is, and its turn.
+  const sides = [
+    [depth / 2, width, 0],
+    [width / 2, depth, Math.PI / 2],
+    [depth / 2, width, Math.PI],
+    [width / 2, depth, -Math.PI / 2],
+  ]
+  for (const [out, across, turned] of sides) {
+    if (across < BARE) continue
+    // Side frame: x across the side, y up, z out of it.
+    growth.place.makeRotationY(turned).multiply(new THREE.Matrix4().makeTranslation(0, 0, out))
+    const half = across / 2
+    const strands = Math.max(2, Math.round(across * between(1.6, 2.4)))
+    for (let strand = 0; strand < strands; strand++) {
+      const reach = Math.min(CLIMB, height) * between(0.3, 1)
+      let x = between(-half + 0.05, half - 0.05)
+      const points: THREE.Vector3[] = []
+      for (let y = 0; y <= reach; y += 0.22) {
+        points.push(new THREE.Vector3(x, y, front + random() * 0.01))
+        x = Math.max(-half + 0.03, Math.min(half - 0.03, x + between(-0.09, 0.09)))
+      }
+      if (points.length < 2) continue
+      addVine(growth, points, random, { spacing: 0.04, leaf: 0.095, spread: 0.1 })
+
+      // Thick where it comes out of the ground.
+      const foot = new THREE.Vector3()
+      for (let i = 0; i < 16; i++) {
+        foot.set(
+          Math.max(-half, Math.min(half, points[0].x + between(-0.25, 0.25))),
+          Math.abs(between(-0.02, 0.4)) * (1 - random() * random()),
+          front + between(0, 0.14),
+        )
+        addLeaf(growth, foot, between(0.06, 0.11), random, between(0.75, 1))
+      }
+    }
+
+    if (across < PLANTED) continue
+    const plantCount = Math.round(across / 1.3)
+    for (let i = 0; i < plantCount; i++) {
+      const fern = random() < 0.4
+      spots.push({
+        model: fern ? 'fern_02' : 'shrub_sorrel_01',
+        at: new THREE.Vector3(between(-half, half), 0, between(0.12, 0.4)).applyMatrix4(
+          growth.place,
+        ),
+        size: fern ? between(0.4, 0.75) : between(2.8, 4.5),
+        pick: random(),
+        turn: between(0, Math.PI * 2),
+      })
+    }
+  }
+
+  const group = grown(growth)
+  if (canLoadImages()) {
+    for (const spot of spots) {
+      void plants(spot.model).then((versions) => {
+        const plant = versions[Math.floor(spot.pick * versions.length)].clone()
+        plant.position.copy(spot.at)
+        plant.rotation.y = spot.turn
+        plant.scale.setScalar(spot.size)
+        // The stored bounds are not where a mesh on the planet is drawn.
+        plant.traverse((object) => {
+          object.frustumCulled = false
+        })
+        group.add(plant)
+      })
+    }
+  }
+  group.traverse((object) => {
+    object.frustumCulled = false
+  })
   return group
 }
 

@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import type { Structure } from '../World'
 import { groundDisk } from '../groundDisk'
-import { glow, matte, palette, rockyGround, Sky } from '../materials'
+import { glow, palette, rockyGround, Sky } from '../materials'
 
 /*
   Distance around the planet. Its radius is this / 2π, about 22 m, and the
@@ -46,7 +46,7 @@ export const hub: Structure = {
       world.addBox({
         size: [1.2, height, 1.2],
         position: [x, height / 2, z],
-        material: matte(palette.stone),
+        overgrown: true,
       })
       world.addBox({
         size: [1.3, 0.25, 1.3],

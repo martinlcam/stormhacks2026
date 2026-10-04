@@ -1,4 +1,5 @@
 import { Site } from '../../engine/planet'
+import { STONE_TILE, stoneMaterial } from '../foliage'
 import type { Structure } from '../World'
 import { glow, matte, palette } from '../materials'
 
@@ -39,33 +40,45 @@ export function resizingDoors(onResize: () => void, onEnterVault: () => void): S
       // The vault: a sealed room three metres square, centred on (vx, vz).
       const vx = -2
       const vz = 5
-      const wall = matte(0x2b2140)
       const gapWidth = 0.4
       const gapHeight = 0.5
       const height = 2.4
       world.addBox({
         size: [1.5, height, 0.2],
         position: [vx - 0.95, height / 2, vz - 1.6],
-        material: wall,
+        overgrown: true,
       })
       world.addBox({
         size: [1.5, height, 0.2],
         position: [vx + 0.95, height / 2, vz - 1.6],
-        material: wall,
+        overgrown: true,
       })
       world.addBox({
         size: [gapWidth, height - gapHeight, 0.2],
         position: [vx, gapHeight + (height - gapHeight) / 2, vz - 1.6],
-        material: wall,
+        overgrown: true,
       })
       world.addBox({
         size: [3.4, height, 0.2],
         position: [vx, height / 2, vz + 1.6],
-        material: wall,
+        overgrown: true,
       })
-      world.addBox({ size: [0.2, height, 3], position: [vx - 1.6, height / 2, vz], material: wall })
-      world.addBox({ size: [0.2, height, 3], position: [vx + 1.6, height / 2, vz], material: wall })
-      world.addBox({ size: [3.4, 0.2, 3.4], position: [vx, height + 0.1, vz], material: wall })
+      world.addBox({
+        size: [0.2, height, 3],
+        position: [vx - 1.6, height / 2, vz],
+        overgrown: true,
+      })
+      world.addBox({
+        size: [0.2, height, 3],
+        position: [vx + 1.6, height / 2, vz],
+        overgrown: true,
+      })
+      world.addBox({
+        size: [3.4, 0.2, 3.4],
+        position: [vx, height + 0.1, vz],
+        material: stoneMaterial(),
+        tile: STONE_TILE,
+      })
 
       // A lit rim, so the gap reads as a way in.
       const rim = glow(palette.cyan)

@@ -3,7 +3,14 @@ import { Body } from '../engine/Body'
 import { type Axis, frameFor } from '../engine/gravity'
 import { assign, POLE, type Site } from '../engine/planet'
 import { Portal } from '../engine/Portal'
-import { overgrowth, WOOD_TILE, woodMaterial } from './foliage'
+import {
+  overgrowth,
+  STONE_TILE,
+  stoneMaterial,
+  wallGrowth,
+  WOOD_TILE,
+  woodMaterial,
+} from './foliage'
 import type { Sky } from './materials'
 
 type Vec3 = readonly [number, number, number]
@@ -16,7 +23,7 @@ type Vec3 = readonly [number, number, number]
   BoxGeometry lists its faces as +x, -x, +y, -y, +z, -z, and each face's UVs
   run 0 to 1 across (u) and up (v).
 */
-function tileBox(geometry: THREE.BoxGeometry, size: Vec3, metres: number) {
+function tileBox(geometry: THREE.BoxGeometry, size: Vec3, metres: number, grain = true) {
   const [width, height, depth] = size
   const { widthSegments, heightSegments, depthSegments } = geometry.parameters
   const faces: [number, number, number][] = [
@@ -33,7 +40,7 @@ function tileBox(geometry: THREE.BoxGeometry, size: Vec3, metres: number) {
     for (let i = 0; i < count; i++, index++) {
       const u = (uv.getX(index) * across) / metres
       const v = (uv.getY(index) * up) / metres
-      if (across > up) uv.setXY(index, v, u)
+      if (grain && across > up) uv.setXY(index, v, u)
       else uv.setXY(index, u, v)
     }
   }
@@ -46,7 +53,8 @@ export interface BoxOptions {
   size: Vec3
   /* Centre of the box. */
   position: Vec3
-  material: THREE.Material
+  /* Not needed for an overgrown box, which is stone. */
+  material?: THREE.Material
   /* Solid to the player. Defaults to true. */
   collide?: boolean
   /*
@@ -54,6 +62,11 @@ export interface BoxOptions {
     along the box's length, instead of stretching one copy over each face.
   */
   tile?: number
+  /*
+    An old stone wall with ivy climbing it and plants at its foot. Takes the
+    place of `material`. For upright boxes that stand on the ground.
+  */
+  overgrown?: boolean
 }
 
 export interface DoorOptions {
@@ -154,12 +167,15 @@ export class World {
     this.colliders.push(box)
   }
 
-  addBox({ size, position, material, collide = true, tile }: BoxOptions): THREE.Mesh {
+  addBox({ size, position, collide = true, tile, overgrown, ...rest }: BoxOptions): THREE.Mesh {
+    const material = overgrown ? stoneMaterial() : rest.material
+    if (!material) throw new Error('A box needs a material')
     // Bending moves vertices, so long faces need enough of them to curve.
     // Vertical edges stay straight when bent and need no extra vertices.
     const segments = (length: number) => Math.max(1, Math.ceil(length / SEGMENT))
     const geometry = new THREE.BoxGeometry(...size, segments(size[0]), 1, segments(size[2]))
-    if (tile) tileBox(geometry, size, tile)
+    if (overgrown) tileBox(geometry, size, STONE_TILE, false)
+    else if (tile) tileBox(geometry, size, tile)
     const mesh = new THREE.Mesh(geometry, material)
     mesh.position.set(...position)
     // The stored bounds are not where a bent mesh is drawn.
@@ -167,6 +183,13 @@ export class World {
     assign(mesh, this.site)
     this.scene.add(mesh)
     if (collide) this.solid(new THREE.Box3().setFromObject(mesh))
+    if (overgrown) {
+      // Named by where it is, so that each wall grows its own way.
+      const growth = wallGrowth(`${this.site.name}/${position.join(',')}`, size)
+      growth.position.set(position[0], position[1] - size[1] / 2, position[2])
+      assign(growth, this.site)
+      this.scene.add(growth)
+    }
     return mesh
   }
 
@@ -236,7 +259,22 @@ export class World {
     local([post, height + post, depth], [side, (height + post) / 2, z], frameMaterial, tile)
     local([width, post, depth], [0, height + post / 2, z], frameMaterial, tile)
     if (options.backing) {
-      local([width + post * 2, height + post, 0.4], [0, (height + post) / 2, -0.3], options.backing)
+      const slab = local(
+        [width + post * 2, height + post, 0.4],
+        [0, (height + post) / 2, -0.3],
+        options.backing,
+      )
+      // An old door that stands on the ground is set in old stone, with ivy round the back.
+      if (overgrown && up === 'y+') {
+        this.scene.remove(slab)
+        const { width: w, height: h, depth: d } = (slab.geometry as THREE.BoxGeometry).parameters
+        this.addBox({
+          size: [w, h, d],
+          position: slab.position.toArray(),
+          overgrown: true,
+          collide: false,
+        })
+      }
     }
 
     const portal = new Portal({
