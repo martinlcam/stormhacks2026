@@ -251,3 +251,79 @@ export function planetMotion(foot: THREE.Vector3, out: THREE.Matrix4): THREE.Mat
   out.multiply(translation.makeTranslation(-foot.x, -foot.y, -foot.z))
   return out
 }
+
+const here = new Frame()
+const there = new Frame()
+const tangent = new THREE.Vector3()
+const lifted = new THREE.Vector3()
+
+/*
+  Where a map point is as seen from an observer standing on the planet.
+
+  The flat map is only true to the planet near the pole; far from it, map
+  offsets are stretched sideways compared with what is drawn. This returns
+  the point in a flat frame that is true around the observer instead: it
+  keeps the observer's map position as its origin and the observer's sense
+  of map directions, and puts the point at its real distance and direction
+  across the ground. Height is unchanged.
+
+  Anything a player aims at or reaches for must be placed this way, or the
+  crosshair and the maths disagree. Off the planet the point is returned as
+  it is.
+*/
+export function seenFrom(
+  observer: THREE.Vector3,
+  point: THREE.Vector3,
+  target: THREE.Vector3,
+): THREE.Vector3 {
+  if (!onPlanet(observer) || !onPlanet(point)) return target.copy(point)
+  here.set(observer.x, observer.z)
+  there.set(point.x, point.z)
+  // The great-circle arc from the observer to the point, laid out flat.
+  const cos = Math.max(-1, Math.min(1, here.up.dot(there.up)))
+  tangent.copy(there.up).addScaledVector(here.up, -cos)
+  const length = tangent.length()
+  if (length < 1e-9) return target.set(observer.x, point.y, observer.z)
+  tangent.multiplyScalar(Math.acos(cos) / planet.k / length)
+  here.lower(tangent, lifted)
+  return target.set(observer.x + lifted.x, point.y, observer.z + lifted.z)
+}
+
+/* The inverse of `seenFrom`: a point in the observer's flat frame → the map. */
+export function placedFrom(
+  observer: THREE.Vector3,
+  seen: THREE.Vector3,
+  target: THREE.Vector3,
+): THREE.Vector3 {
+  if (!onPlanet(observer)) return target.copy(seen)
+  here.set(observer.x, observer.z)
+  here.lift(seen.x - observer.x, seen.z - observer.z, tangent)
+  const distance = tangent.length()
+  if (distance < 1e-9) return target.set(observer.x, seen.y, observer.z)
+  const angle = distance * planet.k
+  // Walk the arc from the observer's "up" towards the tangent direction.
+  lifted.copy(here.up).multiplyScalar(Math.cos(angle))
+  lifted.addScaledVector(tangent, Math.sin(angle) / distance)
+  const theta = Math.acos(Math.max(-1, Math.min(1, lifted.y)))
+  const flat = Math.hypot(lifted.x, lifted.z)
+  if (flat < 1e-9) return target.set(0, seen.y, 0)
+  return target.set(
+    ((lifted.x / flat) * theta) / planet.k,
+    seen.y,
+    ((lifted.z / flat) * theta) / planet.k,
+  )
+}
+
+/*
+  Re-express a map direction that is true at one place as the map direction
+  that means the same thing in space at another place close by. Only x and z
+  change.
+*/
+export function redirect(from: THREE.Vector3, to: THREE.Vector3, vector: THREE.Vector3) {
+  if (!onPlanet(from) || !onPlanet(to)) return vector
+  here.set(from.x, from.z).lift(vector.x, vector.z, tangent)
+  const y = vector.y
+  there.set(to.x, to.z).lower(tangent, vector)
+  vector.y = y
+  return vector
+}

@@ -1,6 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import * as THREE from 'three'
-import { configurePlanet, onPlanet, planetMotion, walkOnPlanet } from '../src/engine/planet'
+import {
+  configurePlanet,
+  onPlanet,
+  placedFrom,
+  planetMotion,
+  redirect,
+  seenFrom,
+  walkOnPlanet,
+} from '../src/engine/planet'
 import { expectAt } from './support'
 
 const CIRCUMFERENCE = 240
@@ -80,6 +88,59 @@ describe('Feature: the plaza is a planet', () => {
 
       expect(onPlanet(room)).toBe(false)
       expectAt(room.clone().applyMatrix4(planetMotion(room, new THREE.Matrix4())), 600, 0, 0)
+    })
+  })
+
+  describe('Scenario: reaching for something far from the spawn point', () => {
+    // 90 m from the pole the map is stretched sideways by more than half.
+    const me = new THREE.Vector3(90, 0, 0)
+
+    it('Given I stand 90 m out, when something is placed 1.5 m to my side on the ground, then I see it 1.5 m to my side, although the map puts it much further', () => {
+      const wanted = new THREE.Vector3(90, 0.2, 1.5)
+
+      const onMap = placedFrom(me, wanted, new THREE.Vector3())
+      const asSeen = seenFrom(me, onMap, new THREE.Vector3())
+
+      expectAt(asSeen, 90, 0.2, 1.5, 4)
+      expect(Math.abs(onMap.z)).toBeGreaterThan(2)
+    })
+
+    it('Given I stand 90 m out, when something is 1.5 m further out along the line from the pole, then the map and what I see agree', () => {
+      const asSeen = seenFrom(me, new THREE.Vector3(91.5, 0, 0), new THREE.Vector3())
+
+      expectAt(asSeen, 91.5, 0, 0, 4)
+    })
+
+    it('Given I stand at the spawn point, when something is 2 m away, then the map and what I see agree', () => {
+      const asSeen = seenFrom(
+        new THREE.Vector3(),
+        new THREE.Vector3(1.2, 0.5, -1.6),
+        new THREE.Vector3(),
+      )
+
+      expectAt(asSeen, 1.2, 0.5, -1.6, 2)
+    })
+
+    it('Given a room off the planet, when I look at something in it, then it is where the map says', () => {
+      const room = new THREE.Vector3(600, 0, 0)
+
+      expectAt(seenFrom(room, new THREE.Vector3(602, 1, 3), new THREE.Vector3()), 602, 1, 3)
+    })
+  })
+
+  describe('Scenario: throwing something far from the spawn point', () => {
+    it('Given I stand 90 m out, when I throw sideways at 10 m/s, then the gem leaves my hand at 10 m/s over the ground, in the direction I threw', () => {
+      const me = new THREE.Vector3(90, 0, 0)
+      const hand = placedFrom(me, new THREE.Vector3(90, 1.3, 0.8), new THREE.Vector3())
+      const thrown = { position: hand.clone(), velocity: new THREE.Vector3(0, 0, 10), yaw: 0 }
+      redirect(me, hand, thrown.velocity)
+
+      const before = seenFrom(me, thrown.position, new THREE.Vector3())
+      walkOnPlanet(thrown, 0.1)
+      const after = seenFrom(me, thrown.position, new THREE.Vector3())
+
+      expect(after.z - before.z).toBeCloseTo(1, 2)
+      expect(after.x - before.x).toBeCloseTo(0, 1)
     })
   })
 })

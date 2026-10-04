@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import type { Engine } from '../engine/Engine'
+import { placedFrom, redirect, seenFrom } from '../engine/planet'
 import type { Portal } from '../engine/Portal'
 import { yawDelta } from '../engine/portalMath'
 import type { Item } from '../world/World'
@@ -57,6 +58,7 @@ const local = new THREE.Vector3()
 const localEnd = new THREE.Vector3()
 const offset = new THREE.Vector3()
 const toItem = new THREE.Vector3()
+const seen = new THREE.Vector3()
 const spin = new THREE.Vector3()
 const UP = new THREE.Vector3(0, 1, 0)
 
@@ -115,10 +117,14 @@ function rayPortal(from: THREE.Vector3, dir: THREE.Vector3, reach: number, porta
 /*
   Picking up, holding, dropping and throwing.
 
-  Everything is worked out in map coordinates, the same space the player and
-  the physics use. The aim ray and the held item both follow portals: you
-  can pick an item up through a doorway, and an item held out through a
-  doorway is drawn on the far side, at the far side's size.
+  Aiming and holding are worked out in a flat frame that is true around the
+  player (see `seenFrom`), because that is what the player sees. The map
+  the physics uses is stretched far from the pole, and aiming on it puts the
+  ray somewhere other than the crosshair.
+
+  The aim ray and the held item both follow portals: you can pick an item
+  up through a doorway, and an item held out through a doorway is drawn on
+  the far side, at the far side's size.
 */
 export class ItemSystem {
   private held: Item | null = null
@@ -275,6 +281,8 @@ export class ItemSystem {
       hold.copy(eye).addScaledVector(direction, Math.max(HOLD_MIN * player.scale, free))
     }
 
+    // `hold` is in the frame around the player; the body lives on the map.
+    placedFrom(player.position, hold, hold)
     body.position.copy(hold)
     body.yaw = player.yaw
     mesh.position.copy(hold)
@@ -297,6 +305,8 @@ export class ItemSystem {
       body.velocity.addScaledVector(look, speed * player.scale)
       body.velocity.y += THROW_LIFT * speed * player.scale
     }
+    // The velocity was worked out where the player stands, not where the item is.
+    redirect(player.position, body.position, body.velocity)
     // If it was held out through a doorway, it is let go on the far side.
     if (this.heldThrough) body.through(this.heldThrough)
     body.resting = false
@@ -319,7 +329,9 @@ export class ItemSystem {
       let found: Item | null = null
       let foundAt = Infinity
       for (const item of world.items) {
-        const { position, radius } = item.body
+        const { radius } = item.body
+        // Where the item is as seen from here, which is what the crosshair is on.
+        const position = seenFrom(origin, item.body.position, seen)
         const miss = aimMiss(origin, direction, position, radius, reach)
         if (miss > best) continue
         toItem.subVectors(position, origin)
