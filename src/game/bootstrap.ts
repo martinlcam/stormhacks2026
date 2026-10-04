@@ -4,6 +4,7 @@ import { Paint } from '../engine/paint'
 import { PortalLighting } from '../engine/PortalLighting'
 import { readFlag } from '../flags'
 import { World } from '../world/World'
+import { bakeCanvas } from '../world/canvasFloor'
 import { buildLightingLab } from '../world/lightingLab'
 import { addWorldLamp } from '../world/lamp'
 import { addLantern, loadLanternTexture } from '../world/lantern'
@@ -212,8 +213,9 @@ export function bootstrap(
   )
   const avatar = new Avatar(world.scene, engine.player, world.portals)
   // Watercolour spreads over the canvas floor behind the player as they walk.
-  const paint =
-    !lightingScene && readFlag('floor') === 'canvas' ? new Paint(engine.renderer) : undefined
+  const canvasFloor = !lightingScene && readFlag('floor') === 'canvas'
+  if (canvasFloor) bakeCanvas(engine.renderer)
+  const paint = canvasFloor ? new Paint(engine.renderer) : undefined
   world.onUpdate((dt, time) => {
     items.update(dt)
     // F, held: work the wheel or lever the player is standing at.
