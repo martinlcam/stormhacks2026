@@ -58,6 +58,13 @@ export const discoveries = {
     maths:
       'Rotations compose: a quarter turn followed by a quarter turn about the same axis is a half turn. The doors are the generators and the places you can stand are the results.',
   },
+  hypercube: {
+    id: 'hypercube',
+    title: 'The shadow of a hypercube',
+    body: 'The sculpture is a cube inside a cube, and it keeps turning itself inside out.',
+    maths:
+      'It is a cube with four axes, and you are looking at its shadow in three. Nothing in it bends: it is only turning, in a plane that includes the fourth axis. Parts that are further away along that axis are drawn smaller, as far things are in a picture.',
+  },
 } satisfies Record<string, Discovery>
 
 export type DiscoveryId = keyof typeof discoveries

@@ -76,6 +76,10 @@ function StartScreen({ onPlay }: { onPlay: () => void }) {
         <dd>pick up / put down</dd>
         <dt className="font-mono text-cyan">Q</dt>
         <dd>throw (hold to charge)</dd>
+        <dt className="font-mono text-cyan">R</dt>
+        <dd>back to the start</dd>
+        <dt className="font-mono text-cyan">M</dt>
+        <dd>sound off / on</dd>
         <dt className="font-mono text-cyan">Esc</dt>
         <dd>release mouse</dd>
       </dl>

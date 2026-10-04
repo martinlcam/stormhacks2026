@@ -8,10 +8,12 @@ import { gravityRoom } from '../world/structures/gravityRoom'
 import { hub } from '../world/structures/hub'
 import { loopCorridor } from '../world/structures/loopCorridor'
 import { resizingDoors } from '../world/structures/resizingDoors'
+import { sculpture } from '../world/structures/sculpture'
 import { Avatar } from './avatar'
 import { ItemSystem } from './items'
 import type { LightingScene, LightingView } from './lightingScenes'
 import { useLightingSettings } from './lightingSettings'
+import { Sound } from './sound'
 import { useGame } from './store'
 
 /*
@@ -44,6 +46,7 @@ export function bootstrap(
         () => game.discover('resizing-door'),
         () => game.discover('small-world'),
       ),
+      sculpture(() => game.discover('hypercube')),
     ]
 
     for (const structure of structures) world.build(structure)
@@ -56,7 +59,26 @@ export function bootstrap(
   const spawn = lightingLab ? lightingLab.spawn : ([0, 0, 2] as const)
   engine.player.spawn.fromArray(spawn)
   engine.player.respawn()
-  engine.player.onLockChange = (locked) => game.setPlaying(locked)
+  const sound = new Sound()
+  engine.player.onLockChange = (locked) => {
+    game.setPlaying(locked)
+    // The click that captures the mouse is what lets the browser play sound.
+    if (locked) sound.start()
+  }
+  const stopListening = useGame.subscribe((now, before) => {
+    if (now.found.length > before.found.length) sound.chime()
+  })
+  const keys = new AbortController()
+  window.addEventListener(
+    'keydown',
+    (event) => {
+      if (event.repeat || !engine.player.locked) return
+      // R: back to the start. M: sound off or on.
+      if (event.code === 'KeyR') engine.player.respawn()
+      if (event.code === 'KeyM') sound.toggle()
+    },
+    { signal: keys.signal },
+  )
   engine.onStats = ({ fps, passes, scale }) => game.setStats(fps, passes, scale)
 
   const lights = lightingLab?.lights ?? worldLamp!.lights
@@ -70,12 +92,15 @@ export function bootstrap(
       thrownThrough: () => {
         if (!lightingScene) game.discover('thrown-through')
       },
+      pickedUp: () => sound.pickUp(),
+      letGo: (level) => (level === null ? sound.putDown() : sound.throw(level)),
     },
     worldLamp?.lamp,
   )
   const avatar = new Avatar(world.scene, engine.player)
   world.onUpdate((dt) => {
     items.update(dt)
+    sound.update(dt, engine.player)
     avatar.update()
     lightingLab?.update(useLightingSettings.getState())
     worldLamp?.update()
@@ -85,10 +110,13 @@ export function bootstrap(
 
   if (import.meta.env.DEV) {
     // Handy in the console: __engine.player.position.set(...)
-    Object.assign(window, { __engine: engine, __items: items })
+    Object.assign(window, { __engine: engine, __items: items, __sound: sound })
   }
 
   return () => {
+    keys.abort()
+    stopListening()
+    sound.dispose()
     items.dispose()
     lightingLab?.dispose()
     worldLamp?.dispose()

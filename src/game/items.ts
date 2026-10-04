@@ -94,6 +94,10 @@ export interface ItemEvents {
   charge(level: number | null): void
   /* A loose item went through a portal by itself. */
   thrownThrough(): void
+  /* An item was picked up. */
+  pickedUp?(): void
+  /* The held item was let go; `level` is the throw's charge, or null if it was put down. */
+  letGo?(level: number | null): void
 }
 
 const eye = new THREE.Vector3()
@@ -234,6 +238,7 @@ export class ItemSystem {
     if (this.held) {
       this.cancelCharge()
       this.release(0)
+      this.events.letGo?.(null)
     } else if (this.target) {
       this.pickUp(this.target)
     }
@@ -243,6 +248,7 @@ export class ItemSystem {
     this.held = item
     item.body.resting = true
     item.body.velocity.set(0, 0, 0)
+    this.events.pickedUp?.()
   }
 
   /* Q pressed: start winding up a throw. */
@@ -255,7 +261,10 @@ export class ItemSystem {
     if (this.charging === null) return
     const level = chargeLevel(this.charging)
     this.cancelCharge()
-    if (this.held) this.release(throwSpeed(level))
+    if (this.held) {
+      this.release(throwSpeed(level))
+      this.events.letGo?.(level)
+    }
   }
 
   private cancelCharge() {
@@ -309,6 +318,17 @@ export class ItemSystem {
       mesh.position.copy(body.position)
       mesh.scale.setScalar(body.scale)
       siteUniform(mesh.material as THREE.Material).value = body.site.motion
+    }
+
+    // Loose items knock into each other.
+    for (let i = 0; i < world.items.length; i++) {
+      const a = world.items[i]
+      if (a === this.held) continue
+      for (let j = i + 1; j < world.items.length; j++) {
+        const b = world.items[j]
+        if (b === this.held || a.body.site !== b.body.site) continue
+        if (a.body.up.dot(b.body.up) > 0.9) a.body.hitBall(b.body)
+      }
     }
 
     if (this.charging !== null) {

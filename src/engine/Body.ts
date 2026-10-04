@@ -162,6 +162,33 @@ export class Body {
     return true
   }
 
+  /*
+    Collide with another ball. They are pushed apart by the same amount and
+    exchange the speed at which they were closing. True if they touched.
+  */
+  hitBall(other: Body): boolean {
+    normal.subVectors(this.position, other.position)
+    const distance = normal.length()
+    const reach = this.radius + other.radius
+    if (distance >= reach || distance < 1e-9) return false
+    normal.divideScalar(distance)
+    const overlap = (reach - distance) / 2
+    this.position.addScaledVector(normal, overlap)
+    other.position.addScaledVector(normal, -overlap)
+
+    relative.subVectors(this.velocity, other.velocity)
+    const into = relative.dot(normal)
+    if (into < 0) {
+      const bounce = -into > DEAD_SPEED * this.scale ? BOUNCE : 0
+      const push = (-(1 + bounce) * into) / 2
+      this.velocity.addScaledVector(normal, push)
+      other.velocity.addScaledVector(normal, -push)
+      this.resting = false
+      other.resting = false
+    }
+    return true
+  }
+
   /* Push the ball out of every box it overlaps. True if it is on the ground. */
   private collide(colliders: readonly THREE.Box3[], doorway: Portal | undefined): boolean {
     const p = this.position

@@ -261,3 +261,35 @@ describe("Feature: the player's figure is solid to gems", () => {
     })
   })
 })
+
+describe('Feature: gems knock into each other', () => {
+  describe('Scenario: one gem thrown at another', () => {
+    it('Given a gem lying still, when another hits it, then the first is sent on and the second slows', () => {
+      const still = gem(1, 0.2, 0)
+      still.resting = true
+      const thrown = gem(0.7, 0.2, 0)
+      thrown.velocity.set(6, 0, 0)
+
+      expect(thrown.hitBall(still)).toBe(true)
+
+      expect(still.resting).toBe(false)
+      expect(still.velocity.x).toBeGreaterThan(3)
+      expect(thrown.velocity.x).toBeLessThan(3)
+      expect(still.position.distanceTo(thrown.position)).toBeCloseTo(0.4, 5)
+    })
+
+    it('Given two gems apart, then they do not touch', () => {
+      expect(gem(0, 0.2, 0).hitBall(gem(1, 0.2, 0))).toBe(false)
+    })
+
+    it('Given two gems lying against each other, then both stay at rest', () => {
+      const a = gem(0, 0.2, 0)
+      const b = gem(0.39, 0.2, 0)
+      a.resting = b.resting = true
+
+      a.hitBall(b)
+
+      expect(a.resting && b.resting).toBe(true)
+    })
+  })
+})
