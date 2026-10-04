@@ -131,7 +131,7 @@ export function Landing({ onEnter, onGone }: { onEnter: () => void; onGone: () =
   const rail = useRef<HTMLDivElement>(null)
   const sound = useRef<LandingSound | null>(null)
   const leaving = useRef<number | null>(null)
-  const [soundOn, setSoundOn] = useState(false)
+  const [soundOn, setSoundOn] = useState(true)
 
   useEffect(() => {
     const track = scroller.current!
@@ -149,6 +149,7 @@ export function Landing({ onEnter, onGone }: { onEnter: () => void; onGone: () =
       ? [createSpeedpaint(deskParts.paint.current!), createSpeedpaint(lightParts.paint.current!)]
       : null
     sound.current = withSound ? createLandingSound() : null
+    sound.current?.setOn(true)
 
     const box = { x: 0, y: 0, w: 0, h: 0 }
     let w = 0

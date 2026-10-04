@@ -3,8 +3,9 @@ import { RAIN_FILE, seamless } from '../game/sound'
 /*
   `?sound=on` (#11): wind that is always there, the rain recording once the
   water comes up, a chime when a light starts to glow and a drip when the
-  drop lands. All but the rain are made here. Nothing plays until the reader
-  turns the sound on, because a browser makes no sound before a click.
+  drop lands. All but the rain are made here. The sound is on from the start,
+  but a browser makes no sound before a click or a key, so it is first heard
+  at the reader's first one.
 */
 export interface LandingSound {
   setOn(on: boolean): void
@@ -18,6 +19,8 @@ const WIND = 0.16
 const RAIN = 0.12
 /* Seconds that the rain recording's end is faded into its start, so it loops without a join. */
 const RAIN_BLEND = 2
+/* What a browser takes as the reader asking for sound. */
+const WAKE = ['pointerdown', 'pointerup', 'keydown'] as const
 
 export function createLandingSound(): LandingSound {
   let context: AudioContext | undefined
@@ -26,6 +29,12 @@ export function createLandingSound(): LandingSound {
   let on = false
   let glowing = false
   let landed = false
+
+  // Sound that was turned on before the browser allowed it starts here.
+  const wake = () => {
+    if (on) void context?.resume()
+  }
+  for (const event of WAKE) window.addEventListener(event, wake)
 
   function start(): AudioContext {
     const audio = new AudioContext()
@@ -134,7 +143,8 @@ export function createLandingSound(): LandingSound {
       master.gain.setTargetAtTime(on ? VOLUME : 0, audio.currentTime, 0.25)
     },
     update({ glow, wash, ripple, leaving }) {
-      const audio = on ? context : undefined
+      // Nothing is played into a context that is still waiting, or it would all sound at once later.
+      const audio = on && context?.state === 'running' ? context : undefined
       if (audio && master && rain) {
         rain.gain.setTargetAtTime(wash * RAIN * (1 - leaving), audio.currentTime, 0.3)
         master.gain.setTargetAtTime(VOLUME * (1 - leaving), audio.currentTime, 0.3)
@@ -148,6 +158,7 @@ export function createLandingSound(): LandingSound {
       landed = ripple >= 0
     },
     dispose() {
+      for (const event of WAKE) window.removeEventListener(event, wake)
       void context?.close()
     },
   }
