@@ -208,3 +208,56 @@ describe('Feature: a throw goes where the crosshair is', () => {
     })
   })
 })
+
+describe("Feature: the player's figure is solid to gems", () => {
+  const feet = new THREE.Vector3(0, 0, 0)
+  const up = new THREE.Vector3(0, 1, 0)
+  const still = new THREE.Vector3()
+  /* One frame of a gem against a figure 0.3 m wide and 1 m tall. */
+  const meet = (body: ReturnType<typeof gem>, walking = still) =>
+    body.hitCylinder(feet, up, 0.3, 1, walking)
+
+  describe('Scenario: a gem thrown at the figure', () => {
+    it('Given a gem flying at my body, when it reaches me, then it bounces back and does not pass through', () => {
+      const body = gem(3, 0.5, 0)
+      body.velocity.set(-8, 0, 0)
+
+      for (let i = 0; i < 60; i++) {
+        body.step(FRAME, [floor], [])
+        meet(body)
+      }
+
+      expect(body.position.x).toBeGreaterThan(0.3)
+    })
+
+    it('Given a gem flying over my head, then it carries on untouched', () => {
+      const body = gem(0.5, 1.6, 0)
+      body.velocity.set(-8, 0, 0)
+
+      expect(meet(body)).toBe(false)
+      expect(body.velocity.x).toBe(-8)
+    })
+  })
+
+  describe('Scenario: walking into a gem', () => {
+    it('Given a gem lying still, when I walk into it, then it is knocked away ahead of me', () => {
+      const body = gem(0.4, 0.2, 0)
+      body.resting = true
+
+      meet(body, new THREE.Vector3(4, 0, 0))
+
+      expect(body.resting).toBe(false)
+      expect(body.velocity.x).toBeGreaterThanOrEqual(4)
+      expect(body.position.x).toBeCloseTo(0.5, 5)
+    })
+
+    it('Given a gem lying still against me, when I stand still, then it stays at rest', () => {
+      const body = gem(0.45, 0.2, 0)
+      body.resting = true
+
+      meet(body)
+
+      expect(body.resting).toBe(true)
+    })
+  })
+})

@@ -50,6 +50,15 @@ const MAX_HOPS = 3
 */
 const AIM_MARGIN = 0.14
 
+/*
+  The player's figure as items meet it: a cylinder as wide as the body and
+  as tall as the top of the head, per unit of the player's scale. It is
+  much shorter than the eye, which is why a held item, up by the eye, is
+  clear of it.
+*/
+const FIGURE_RADIUS = 0.3
+const FIGURE_HEIGHT = 1
+
 /* How full the charge is, 0 to 1, after holding Q for this long. */
 export function chargeLevel(heldSeconds: number): number {
   return Math.max(0, Math.min(1, heldSeconds / CHARGE_TIME))
@@ -271,6 +280,16 @@ export class ItemSystem {
         if (along > 1e-4) {
           mesh.rotateOnWorldAxis(spin.divideScalar(along), (along / body.radius) * dt)
         }
+      }
+      // The figure is solid: thrown things bounce off it and it kicks what it walks into.
+      if (body.site === player.site) {
+        body.hitCylinder(
+          player.position,
+          player.up,
+          FIGURE_RADIUS * player.scale,
+          FIGURE_HEIGHT * player.scale,
+          player.velocity,
+        )
       }
       if (body.position.y < -40) {
         body.position.copy(item.home)

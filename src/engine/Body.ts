@@ -20,6 +20,8 @@ const closest = new THREE.Vector3()
 const normal = new THREE.Vector3()
 const localBefore = new THREE.Vector3()
 const localAfter = new THREE.Vector3()
+const across = new THREE.Vector3()
+const relative = new THREE.Vector3()
 
 /*
   A ball that falls, bounces, rolls and goes through portals.
@@ -110,6 +112,54 @@ export class Body {
         this.resting = true
       }
     }
+  }
+
+  /*
+    Collide with an upright solid cylinder that may be moving, such as the
+    player's figure: `feet` is the middle of its base and `up` its axis. The
+    ball is pushed out and bounces off, and a ball lying still is knocked
+    away by a cylinder that walks into it. True if they touched.
+  */
+  hitCylinder(
+    feet: THREE.Vector3,
+    up: THREE.Vector3,
+    radius: number,
+    height: number,
+    velocity: THREE.Vector3,
+  ): boolean {
+    // The point of the cylinder nearest the ball's centre.
+    across.subVectors(this.position, feet)
+    const rise = across.dot(up)
+    across.addScaledVector(up, -rise)
+    const out = across.length()
+    const inside = out < radius && rise > 0 && rise < height
+    if (inside) {
+      // Centre is inside the cylinder: leave through its side.
+      if (out > 1e-9) normal.copy(across).divideScalar(out)
+      else normal.set(1, 0, 0).cross(up).normalize()
+      this.position.addScaledVector(normal, radius - out + this.radius)
+    } else {
+      if (out > radius) across.multiplyScalar(radius / out)
+      closest
+        .copy(feet)
+        .add(across)
+        .addScaledVector(up, Math.max(0, Math.min(height, rise)))
+      normal.subVectors(this.position, closest)
+      const distance = normal.length()
+      if (distance >= this.radius || distance < 1e-9) return false
+      normal.divideScalar(distance)
+      this.position.addScaledVector(normal, this.radius - distance)
+    }
+
+    // Only the speed at which the two are closing is turned round.
+    relative.subVectors(this.velocity, velocity)
+    const into = relative.dot(normal)
+    if (into < 0) {
+      const bounce = -into > DEAD_SPEED * this.scale ? BOUNCE : 0
+      this.velocity.addScaledVector(normal, -(1 + bounce) * into)
+      this.resting = false
+    }
+    return true
   }
 
   /* Push the ball out of every box it overlaps. True if it is on the ground. */
