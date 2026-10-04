@@ -5,6 +5,19 @@
 - [Original Beyond Euclid challenge PDF](docs/beyond-euclid-challenge.pdf)
 - [Searchable text, including resource links](docs/beyond-euclid-challenge.txt)
 
+## Lighting in the full world
+
+Open `/#play` or enter from the landing page. Pick up the amber lamp on the
+pedestal ahead and to the right of spawn with **E**, then carry or throw it
+through the world. It illuminates the ground, objects, and spaces visible through
+doorways. Its position follows the planet's regions; resizing doors scale its
+range and strength along with the lamp, and a lamp halfway through a doorway
+illuminates both sides. The lab and full world use the same lamp implementation.
+
+The existing sky, daylight, and ambient fill remain active. The lamp's direct
+light uses the textured ground's curved orientation. Cast shadows, volumetric
+beams, and light paths through multiple successive portals are still pending.
+
 ## Lighting lab
 
 Run `bun install` and `bun run dev`, then choose **Open lighting lab** on the
@@ -38,15 +51,16 @@ navigation. Test distance falloff and surface shading by moving the lamp toward
 the wall, floor and sphere, then throw it and watch the pool of light follow.
 
 These scenes are a harness for lighting work; they do not yet add cast shadows,
-volumetric effects or correct the existing curved-surface normals. Without
+volumetric effects or correct all curved-surface normals. Without
 shadows the lamp can illuminate through nearby solid objects. Its light now travels
 through one portal crossing in either direction, restricted to rays passing through
 the rectangular opening. Hold it in front of a doorway and move it sideways to
 watch the illuminated region move inside. The transport uses the same curved
 portal frames as the camera, and does not require the lamp itself to cross.
 Start with flat lighting and player/object shadows, check the curvature and portal scenes
-independently, then use the combined scene. Add rotated-gravity and resizing
-portal cases after those pass, before integrating into the full game.
+independently, then use the combined scene. The shared lamp also runs in the full
+game, with regression checks for different planet regions, rotated-gravity doors,
+and resizing doors.
 
 In either portal scene, choose **Doorway light test** for a repeatable close view
 with the lamp on a pedestal in front of the opening. The URL adds `&view=doorway`.

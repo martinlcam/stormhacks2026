@@ -59,6 +59,10 @@ function StartScreen({ onPlay }: { onPlay: () => void }) {
         Beyond Euclid
       </h1>
       <p className="text-lg text-bone/80">Click to enter</p>
+      <p className="max-w-sm px-4 text-center text-sm text-bone/80">
+        Pick up the amber lamp on the pedestal ahead and to your right with E. Carry its light
+        through the doorways.
+      </p>
       <dl className="grid grid-cols-[auto_auto] gap-x-4 gap-y-1 text-left text-sm text-bone/60">
         <dt className="font-mono text-cyan">WASD</dt>
         <dd>move</dd>

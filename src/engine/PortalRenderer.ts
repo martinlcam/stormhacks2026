@@ -59,7 +59,7 @@ export class PortalRenderer {
   beforePass?: (doors: number) => void
   /* Scene passes drawn last frame, for the debug HUD. */
   passes = 0
-  /* Optional point-light transport; the normal game has no registered emitters yet. */
+  /* Direct illumination from the world's registered movable emitters. */
   portalLighting?: PortalLighting
 
   private readonly clipPlane = NO_CLIP.clone()

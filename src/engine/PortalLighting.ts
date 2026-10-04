@@ -1,5 +1,4 @@
 import * as THREE from 'three'
-import { planetMotion } from './planet'
 import type { Portal } from './Portal'
 
 /* All positions here are in rendered space, after the planet deformation. */
@@ -12,7 +11,23 @@ export interface PortalLightSample {
   opening: THREE.Vector2
 }
 
+/* Loaded models and their material clones can survive a world restart or hot reload. Keep
+   the original hook so a new lighting instance replaces the old uniforms. */
+const LIGHTING_HOOK = Symbol.for('beyond-euclid.portal-lighting')
+
+type LightingCompile = THREE.Material['onBeforeCompile'] & {
+  [LIGHTING_HOOK]?: {
+    owner: PortalLighting
+    before: THREE.Material['onBeforeCompile']
+    key: string
+  }
+}
+
 const PARS = /* glsl */ `
+#ifndef DYNAMIC_LIGHT_NORMAL
+  #define DYNAMIC_LIGHT_NORMAL geometryNormal
+#endif
+
 struct PortalPointLight {
   vec3 position;
   vec3 radiance;
@@ -58,7 +73,7 @@ const DIRECT = /* glsl */ `
     portalIncident.color = lamp.radiance * getDistanceAttenuation(lightDistance, lamp.range, lamp.decay);
     portalIncident.visible = true;
 
-    RE_Direct(portalIncident, geometryPosition, geometryNormal, geometryViewDir,
+    RE_Direct(portalIncident, geometryPosition, DYNAMIC_LIGHT_NORMAL, normalize(vViewPosition),
       geometryClearcoatNormal, material, reflectedLight);
   }
 #endif
@@ -73,13 +88,10 @@ const DIRECT = /* glsl */ `
 export class PortalLighting {
   readonly samples: PortalLightSample[]
 
-  private readonly patched = new WeakSet<THREE.Material>()
   private readonly cameraWorld = { value: new THREE.Matrix4() }
   private readonly lightUniform: { value: PortalLightSample[] }
   private readonly sourcePosition = new THREE.Vector3()
   private readonly localPosition = new THREE.Vector3()
-  private readonly portalMotion = new THREE.Matrix4()
-  private readonly sourceInverse = new THREE.Matrix4()
   private readonly paths: { light: THREE.PointLight; entrance: Portal; sample: PortalLightSample }[]
 
   constructor(lights: readonly THREE.PointLight[], portals: readonly Portal[]) {
@@ -108,9 +120,7 @@ export class PortalLighting {
       light.getWorldPosition(this.sourcePosition)
 
       // Match the same rigid portal frames used for the virtual cameras.
-      const motion = planetMotion(entrance.mesh.position, this.portalMotion)
-      this.sourceInverse.copy(motion).invert().premultiply(entrance.worldInverse)
-      this.localPosition.copy(this.sourcePosition).applyMatrix4(this.sourceInverse)
+      this.localPosition.copy(this.sourcePosition).applyMatrix4(entrance.spaceInverse)
 
       if (!light.visible || light.intensity <= 0 || this.localPosition.z <= 0) continue
 
@@ -127,8 +137,7 @@ export class PortalLighting {
       sample.radiance.copy(light.color).multiplyScalar(light.intensity * scale ** light.decay)
       sample.range = light.distance * scale
       sample.decay = light.decay
-      planetMotion(entrance.target.mesh.position, this.portalMotion)
-      sample.worldToExit.copy(this.portalMotion).invert().premultiply(entrance.target.worldInverse)
+      sample.worldToExit.copy(entrance.target.spaceInverse)
     }
   }
 
@@ -140,33 +149,39 @@ export class PortalLighting {
   /* Compose with the existing planet shader hook, after it has been installed. */
   apply(material: THREE.Material) {
     if (this.samples.length === 0 || !(material instanceof THREE.MeshStandardMaterial)) return
-    if (this.patched.has(material)) return
+    const installed = (material.onBeforeCompile as LightingCompile)[LIGHTING_HOOK]
+    if (installed?.owner === this) return
 
-    this.patched.add(material)
-    const previousCompile = material.onBeforeCompile
-    const previousKey = material.customProgramCacheKey()
+    const previousCompile = installed?.before ?? material.onBeforeCompile
+    const previousKey = installed?.key ?? material.customProgramCacheKey()
+    const lightUniform = this.lightUniform
+    const cameraWorld = this.cameraWorld
+    const sampleCount = this.samples.length
 
-    material.onBeforeCompile = (shader, renderer) => {
-      previousCompile.call(material, shader, renderer)
+    material.onBeforeCompile = function (this: THREE.Material, shader, renderer) {
+      previousCompile.call(this, shader, renderer)
 
       if (
         !shader.fragmentShader.includes('#include <lights_pars_begin>') ||
-        !shader.fragmentShader.includes('#include <lights_fragment_begin>')
+        !shader.fragmentShader.includes('#include <lights_fragment_end>')
       ) {
         throw new Error('Portal lighting requires the standard direct-light shader chunks')
       }
 
-      shader.uniforms.uPortalLights = this.lightUniform
-      shader.uniforms.uPortalCameraWorld = this.cameraWorld
+      shader.uniforms.uPortalLights = lightUniform
+      shader.uniforms.uPortalCameraWorld = cameraWorld
       shader.fragmentShader = shader.fragmentShader
         .replace(
           '#include <lights_pars_begin>',
-          `#include <lights_pars_begin>\n#define PORTAL_LIGHT_COUNT ${this.samples.length}\n${PARS}`,
+          `#include <lights_pars_begin>\n#define PORTAL_LIGHT_COUNT ${sampleCount}\n${PARS}`,
         )
-        .replace('#include <lights_fragment_begin>', `#include <lights_fragment_begin>\n${DIRECT}`)
+        .replace('#include <lights_fragment_end>', `${DIRECT}\n#include <lights_fragment_end>`)
     }
 
-    material.customProgramCacheKey = () => `${previousKey}:portal-light-v1:${this.samples.length}`
+    Object.assign(material.onBeforeCompile, {
+      [LIGHTING_HOOK]: { owner: this, before: previousCompile, key: previousKey },
+    })
+    material.customProgramCacheKey = () => `${previousKey}:portal-light-v2:${sampleCount}`
     material.needsUpdate = true
   }
 }

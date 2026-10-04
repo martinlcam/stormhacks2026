@@ -2,6 +2,7 @@ import { Engine } from '../engine/Engine'
 import { PortalLighting } from '../engine/PortalLighting'
 import { World } from '../world/World'
 import { buildLightingLab } from '../world/lightingLab'
+import { addWorldLamp } from '../world/lamp'
 import { biggerInside } from '../world/structures/biggerInside'
 import { gravityRoom } from '../world/structures/gravityRoom'
 import { hub } from '../world/structures/hub'
@@ -48,6 +49,7 @@ export function bootstrap(
     for (const structure of structures) world.build(structure)
   }
 
+  const worldLamp = lightingLab ? undefined : addWorldLamp(world)
   world.finalize()
 
   const engine = new Engine(canvas, world)
@@ -57,9 +59,8 @@ export function bootstrap(
   engine.player.onLockChange = (locked) => game.setPlaying(locked)
   engine.onStats = ({ fps, passes, scale }) => game.setStats(fps, passes, scale)
 
-  if (lightingLab) {
-    engine.portalRenderer.portalLighting = new PortalLighting(lightingLab.lights, world.portals)
-  }
+  const lights = lightingLab?.lights ?? worldLamp!.lights
+  engine.portalRenderer.portalLighting = new PortalLighting(lights, world.portals)
 
   const items = new ItemSystem(engine, {
     prompt: (text) => game.setPrompt(text),
@@ -73,6 +74,7 @@ export function bootstrap(
     items.update(dt)
     avatar.update()
     lightingLab?.update(useLightingSettings.getState())
+    worldLamp?.update()
   })
 
   engine.start()
@@ -85,6 +87,7 @@ export function bootstrap(
   return () => {
     items.dispose()
     lightingLab?.dispose()
+    worldLamp?.dispose()
     engine.dispose()
   }
 }
