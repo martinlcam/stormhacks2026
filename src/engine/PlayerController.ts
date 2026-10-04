@@ -20,6 +20,11 @@ const wish = new THREE.Vector3()
 const before = new THREE.Vector3()
 const localBefore = new THREE.Vector3()
 const localAfter = new THREE.Vector3()
+const eyeBefore = new THREE.Vector3()
+const eyeAfter = new THREE.Vector3()
+const sample = new THREE.Vector3()
+/* How many steps the body is checked in, from feet to eye, against a doorway. */
+const BODY_SAMPLES = 3
 const frameTurn = new THREE.Quaternion()
 const lookTurn = new THREE.Quaternion()
 const lookEuler = new THREE.Euler()
@@ -178,7 +183,7 @@ export class PlayerController {
       this.position.addScaledVector(this.velocity, dt)
     }
 
-    const doorway = portals.find((portal) => this.canEnter(portal) && portal.inDoorway(before))
+    const doorway = portals.find((portal) => this.inDoorway(portal, before))
     this.collideInFrame(colliders, doorway)
     // Passing the point opposite the pole moves the walker to the far side
     // of the map in one step. That is not a path a portal could be on.
@@ -272,19 +277,43 @@ export class PlayerController {
     }
   }
 
-  /*
-    A door can be walked through only by someone who fits and who stands the
-    same way up as it does. A door lying on its side on your wall is a wall.
-  */
+  /* A door can be gone through by anyone who fits, whichever way up they are. */
   private canEnter(portal: Portal) {
-    return portal.fits(RADIUS * 2 * this.scale, HEIGHT * this.scale) && portal.up.dot(this.up) > 0.9
+    return portal.fits(RADIUS * 2 * this.scale, HEIGHT * this.scale)
   }
 
-  /* Carry the player through any portal their path crossed this step. */
+  /*
+    True while any part of the body is in a doorway. The body is sampled from
+    feet to eye, because it may be going through feet first: a door lying in
+    the floor is a hole, and the wall behind it must stop being solid for as
+    long as the body is passing.
+  */
+  private inDoorway(portal: Portal, feet: THREE.Vector3) {
+    if (!this.canEnter(portal)) return false
+    const eye = EYE_HEIGHT * this.scale
+    for (let i = 0; i <= BODY_SAMPLES; i++) {
+      sample.copy(feet).addScaledVector(this.up, (eye * i) / BODY_SAMPLES)
+      if (portal.inDoorway(sample)) return true
+    }
+    return false
+  }
+
+  /*
+    Carry the player through any portal their eye crossed this step.
+
+    The eye, not the feet, decides. For an upright door there is no
+    difference, since both cross together. For a door lying in the floor
+    the feet go in first, and moving the player then would put the camera on
+    the far side while it is still looking at the near one. Waiting for the
+    eye keeps the view continuous whichever way the body goes in.
+  */
   private traverse(portals: readonly Portal[]) {
+    const eye = EYE_HEIGHT * this.scale
+    eyeBefore.copy(before).addScaledVector(this.up, eye)
+    eyeAfter.copy(this.position).addScaledVector(this.up, eye)
     for (const portal of portals) {
-      portal.toLocal(before, localBefore)
-      portal.toLocal(this.position, localAfter)
+      portal.toLocal(eyeBefore, localBefore)
+      portal.toLocal(eyeAfter, localAfter)
       if (localBefore.z <= 0 || localAfter.z > 0) continue
 
       // Where the path met the plane must be inside the opening.
@@ -292,16 +321,19 @@ export class PlayerController {
       localBefore.lerp(localAfter, t)
       if (!portal.withinOpening(localBefore) || !this.canEnter(portal)) continue
 
-      this.position.applyMatrix4(portal.transform)
+      eyeAfter.applyMatrix4(portal.transform)
       // A resizing portal changes the player and their speed by the same ratio.
       const ratio = portal.target.scale / portal.scale
       const speed = this.velocity.length() * ratio
       this.scale *= ratio
       this.velocity.transformDirection(portal.transform).multiplyScalar(speed)
-      // The door may turn the player onto a wall or the ceiling.
+      // The door may turn the player onto a wall or the ceiling. The planet
+      // has only one up.
       const turned = reorient(this.axis, this.yaw, portal.transform)
-      this.axis = turned.axis
+      this.axis = onPlanet(eyeAfter) ? 'y+' : turned.axis
       this.yaw = turned.yaw
+      // Hang the body from the eye, along the new up.
+      this.position.copy(eyeAfter).addScaledVector(this.up, -EYE_HEIGHT * this.scale)
       portal.onTraverse?.()
       return
     }

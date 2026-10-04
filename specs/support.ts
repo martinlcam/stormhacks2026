@@ -60,3 +60,13 @@ export function expectAt(v: THREE.Vector3, x: number, y: number, z: number, digi
   expect(v.y).toBeCloseTo(y, digits)
   expect(v.z).toBeCloseTo(z, digits)
 }
+
+/*
+  The player listens for keys and the mouse. Specs have no browser, so give
+  it something to listen to that never says anything.
+*/
+export function quietBrowser() {
+  const silent = { addEventListener() {}, pointerLockElement: null }
+  Object.assign(globalThis, { window: silent, document: silent })
+  return silent as unknown as HTMLElement
+}
