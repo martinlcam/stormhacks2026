@@ -169,19 +169,35 @@ function Points() {
           </span>
           <span className="text-base text-caption opacity-70"> / {TOTAL}</span>
         </div>
-        <Stroke fill={found / TOTAL} className="mt-1.5 w-28" track="bg-caption/30" />
+        <Stroke fill={found / TOTAL} className="mt-1.5 w-28" track="bg-caption/30" eased />
       </div>
     </div>
   )
 }
 
-/* A pencil line, with a stroke of watercolour along it as far as `fill` (0 to 1). */
-function Stroke({ fill, className, track }: { fill: number; className: string; track: string }) {
+/*
+  A pencil line, with a stroke of watercolour along it as far as `fill` (0 to 1).
+  `eased` glides to a new length, for a value that changes now and then. A
+  value that changes every frame must not be: each change would start the
+  glide again from its slow beginning, and the stroke would hang back and
+  then jump.
+*/
+function Stroke({
+  fill,
+  className,
+  track,
+  eased = false,
+}: {
+  fill: number
+  className: string
+  track: string
+  eased?: boolean
+}) {
   return (
     <div className={`relative h-1.5 ${className}`}>
       <div className={`absolute inset-x-0 top-1/2 h-px ${track}`} />
       <div
-        className="absolute inset-y-0 left-0 rounded-full transition-[width] duration-700"
+        className={`absolute inset-y-0 left-0 rounded-full ${eased ? 'transition-[width] duration-700' : ''}`}
         style={{ width: `${fill * 100}%`, background: STROKE }}
       />
     </div>
