@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { FILM_GRADE, FILM_PARS, filmUniforms } from './film'
+import { FILM_GRADE, FILM_PARS, filmUniforms, keepUniform } from './film'
 
 /*
   The plaza as a real sphere.
@@ -239,6 +239,8 @@ export function planetMaterial(
     before.call(this, shader, renderer)
     Object.assign(shader.uniforms, planetUniforms, filmUniforms)
     shader.uniforms.uSite = siteUniform(this)
+    if (this.userData.keep !== undefined)
+      shader.uniforms.uFilmKeep = keepUniform(this.userData.keep)
     if (portalTransfer) shader.uniforms.uPortalObjectTransfer = portalTransfer
 
     shader.vertexShader = shader.vertexShader

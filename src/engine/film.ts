@@ -1,8 +1,10 @@
 /*
   The look of the world. It is black and white, as old film is, until the
   player solves puzzles: each one puts a colour of the rainbow back, red
-  first. The dark parts of the picture carry film grain, and so, faintly,
-  does anything the player can pick up.
+  first. The things a puzzle is made of are never quite grey: they keep
+  half of their colour, and have all of it once their puzzle is solved. The
+  dark parts of the picture carry film grain, and so, faintly, does anything
+  the player can pick up.
 
   It is done at the end of every material's own shader and not in a pass
   over the finished picture, so that the portal renderer's stencil, scissor
@@ -27,6 +29,8 @@ export const RAINBOW = [
 const SOFT = 6
 /* Seconds a colour takes to come back. */
 const BLOOM = 2.5
+/* How much of its colour a puzzle's thing keeps while the puzzle is unsolved, out of 1. */
+const KEPT = 0.5
 /* How often the grain changes, as frames of film do. */
 const FRAMES_A_SECOND = 24
 /* How strong the grain is in the dark, and on an item, out of 1. */
@@ -50,6 +54,31 @@ export const filmUniforms = {
   uFilmFrame: { value: 0 },
   /* How many pixels of the canvas one speck of grain covers. */
   uFilmSpeck: { value: 1 },
+  /* The least of its colour a material keeps. A puzzle's things have their own (see `keepColour`). */
+  uFilmKeep: { value: 0 },
+}
+
+/* Each set of things that keep some colour: how much, and whether it is to be all of it. */
+const kept: { uniform: { value: number }; whole: boolean }[] = []
+
+/*
+  A new set of things that keep half their colour, as the things of one
+  puzzle. Returns its number: a material with that as `userData.keep` is one
+  of the set. A number, so that it lasts through the copying of a material.
+*/
+export function keepColour(): number {
+  kept.push({ uniform: { value: KEPT }, whole: false })
+  return kept.length - 1
+}
+
+/* The share of its colour that a set keeps, for a shader. */
+export function keepUniform(set: number): { value: number } {
+  return kept[set].uniform
+}
+
+/* Give a set all of its colour. It fades in. */
+export function restoreKept(set: number) {
+  kept[set].whole = true
 }
 
 /* How many colours are back, or on their way. */
@@ -79,6 +108,9 @@ export function stepFilm(dt: number, elapsed: number) {
     const target = i < restored ? 1 : 0
     colours[i] += Math.max(-step, Math.min(step, target - colours[i]))
   }
+  for (const { uniform, whole } of kept) {
+    if (whole) uniform.value = Math.min(1, uniform.value + step * (1 - KEPT))
+  }
   filmUniforms.uFilmFrame.value = Math.floor(elapsed * FRAMES_A_SECOND)
 }
 
@@ -96,6 +128,7 @@ uniform float uFilmColours[${RAINBOW.length}];
 uniform float uFilmGrain;
 uniform float uFilmFrame;
 uniform float uFilmSpeck;
+uniform float uFilmKeep;
 
 float filmHue(vec3 c) {
   float high = max(c.r, max(c.g, c.b));
@@ -112,7 +145,7 @@ float filmClaim(float hue, float centre, float half_) {
   return 1.0 - smoothstep(half_ - ${SOFT.toFixed(1)}, half_ + ${SOFT.toFixed(1)}, away);
 }
 
-// Grey, but for the colours that are back.
+// Grey, but for the colours that are back and the share that is kept.
 vec3 filmColour(vec3 c) {
   float hue = filmHue(c);
   float keep = 0.0;
@@ -121,7 +154,7 @@ ${BANDS.map(
     `  keep += uFilmColours[${i}] * filmClaim(hue, ${centre.toFixed(1)}, ${half.toFixed(1)});`,
 ).join('\n')}
   float grey = dot(c, vec3(0.299, 0.587, 0.114));
-  return mix(vec3(grey), c, clamp(keep, 0.0, 1.0));
+  return mix(vec3(grey), c, clamp(max(keep, uFilmKeep), 0.0, 1.0));
 }
 
 // Grain that is strongest in the dark and never weaker than \`least\`.

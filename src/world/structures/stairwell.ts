@@ -1,7 +1,7 @@
 import { PLANK_TILE, plankMaterial, WOOD_TILE, woodMaterial } from '../foliage'
 import type { Structure } from '../World'
 import { glow, palette } from '../materials'
-import { addRegion, type PuzzleEvents, ramp, shine } from '../puzzle'
+import { addColours, addRegion, type PuzzleEvents, ramp, shine } from '../puzzle'
 
 /* The tower stands far from everything else; only its doors lead to it. */
 const X = 1200
@@ -236,6 +236,7 @@ export function stairwell(
       world.link(outside, inside)
 
       // The gong. An open gong is not drawn and is moved out of the world.
+      const colours = addColours()
       const well = HALF - WIDTH
       const AWAY = 200
       const plate = world.addCollider(
@@ -245,7 +246,7 @@ export function stairwell(
       const gong = world.addBox({
         size: [well * 2, SLAB, well * 2],
         position: [X, GONG - SLAB / 2, 0],
-        material: glow(ramp(ICE, 0.5), 0.35),
+        material: colours.keep(glow(ramp(ICE, 0.5), 0.35)),
         collide: false,
       })
       gong.visible = false
@@ -254,13 +255,13 @@ export function stairwell(
         world.addBox({
           size: [well * 2, 0.05, 0.05],
           position: [X, GONG, side * well],
-          material: glow(ICE[1], 0.5),
+          material: colours.keep(glow(ICE[1], 0.5)),
           collide: false,
         }),
         world.addBox({
           size: [0.05, 0.05, well * 2],
           position: [X + side * well, GONG, 0],
-          material: glow(ICE[1], 0.5),
+          material: colours.keep(glow(ICE[1], 0.5)),
           collide: false,
         }),
       ])
@@ -285,7 +286,7 @@ export function stairwell(
       const lit = world.addBox({
         size: [1.2, 0.04, 1.2],
         position: [X + plateX, FLIGHT + 0.02, plateZ],
-        material: glow(ICE[1], 0.6),
+        material: colours.keep(glow(ICE[1], 0.6)),
         collide: false,
       })
       world.addTrigger(
@@ -297,7 +298,7 @@ export function stairwell(
 
       world.addItem({
         position: [X + corners[0][0] - 0.5, 0.18, corners[0][1] - 0.5],
-        material: glow(ramp(ICE, 0.5), 1.3),
+        material: colours.keep(glow(ramp(ICE, 0.5), 1.3)),
       })
 
       let solved = false
@@ -320,6 +321,7 @@ export function stairwell(
           onGong?.(before / RINGING)
           if (solved || before < RINGING) continue
           solved = true
+          colours.restore()
           puzzle.solved()
           refresh()
         }

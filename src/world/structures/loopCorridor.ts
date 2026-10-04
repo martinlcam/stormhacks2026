@@ -1,6 +1,6 @@
 import type { Structure } from '../World'
 import { glow, matte, palette } from '../materials'
-import { addRegion, addSocket, type PuzzleEvents, ramp, shade, shine } from '../puzzle'
+import { addColours, addRegion, addSocket, type PuzzleEvents, ramp, shade, shine } from '../puzzle'
 
 /* The puzzle's colours, from two laps west to two laps east: rose, amber, mint. */
 const LAPS = [0xff5d8f, 0xffb347, 0x7dffb8]
@@ -72,12 +72,13 @@ export function loopCorridor(onEnter: () => void, puzzle: PuzzleEvents): Structu
       }
 
       // The lap dial: a lamp for each lap from two west to two east, west to east.
+      const colours = addColours()
       world.addBox({ size: [2.7, 0.6, 0.3], position: [6.6, 0.3, z - 1.5], material: stone })
       const lamps = Array.from({ length: FURTHEST * 2 + 1 }, (_, i) =>
         world.addBox({
           size: [0.3, 0.3, 0.3],
           position: [6.6 + (i - FURTHEST) * 0.55, 0.78, z - 1.5],
-          material: glow(lapColour(i - FURTHEST), 0.12),
+          material: colours.keep(glow(lapColour(i - FURTHEST), 0.12)),
           collide: false,
         }),
       )
@@ -90,7 +91,7 @@ export function loopCorridor(onEnter: () => void, puzzle: PuzzleEvents): Structu
       world.addBox({ size: [0.5, 0.4, 0.5], position: [cx, 0.2, cz], material: stone })
       const key = world.addItem({
         position: [cx, 0.58, cz],
-        material: glow(lapColour(CAGE_LAP), 1.3),
+        material: colours.keep(glow(lapColour(CAGE_LAP), 1.3)),
       })
       const outer = half + 0.05
       const walls = [
@@ -100,7 +101,7 @@ export function loopCorridor(onEnter: () => void, puzzle: PuzzleEvents): Structu
         world.addCollider([cx - outer, 0, cz + half], [cx + outer, top, cz + outer]),
         world.addCollider([cx - outer, top, cz - outer], [cx + outer, top + 0.05, cz + outer]),
       ]
-      const bar = glow(lapColour(CAGE_LAP), 0.9)
+      const bar = colours.keep(glow(lapColour(CAGE_LAP), 0.9))
       const bars = [
         world.addBox({
           size: [outer * 2, 0.05, outer * 2],
@@ -145,6 +146,7 @@ export function loopCorridor(onEnter: () => void, puzzle: PuzzleEvents): Structu
         position: [7.8, 0, z + 1.5],
         colour: lapColour(SOCKET_LAP),
         items: [key],
+        colours,
       })
 
       let solved = false
@@ -175,6 +177,7 @@ export function loopCorridor(onEnter: () => void, puzzle: PuzzleEvents): Structu
         socket.show(solved || filled ? 'filled' : lap === SOCKET_LAP ? 'ready' : 'waiting')
         if (!filled || solved) return
         solved = true
+        colours.restore()
         puzzle.solved()
         refresh()
       })

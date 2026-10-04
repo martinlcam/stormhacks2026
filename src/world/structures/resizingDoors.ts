@@ -1,7 +1,7 @@
 import { PLANK_TILE, plankMaterial } from '../foliage'
 import type { Structure } from '../World'
 import { glow, matte, palette } from '../materials'
-import { addBeacon, addRegion, addSocket, type PuzzleEvents, ramp } from '../puzzle'
+import { addBeacon, addColours, addRegion, addSocket, type PuzzleEvents, ramp } from '../puzzle'
 
 /* How much smaller the small door is, and so how much it shrinks you. */
 const RATIO = 0.25
@@ -115,24 +115,26 @@ export function resizingDoors(
       world.onUpdate((_dt, time) => core.rotation.set(time * 0.5, time * 0.7, 0))
       world.addTrigger([vx - 1.5, -1, vz - 1.5], [vx + 1.5, height, vz + 1.5], onEnterVault)
 
+      const colours = addColours()
       const gems = [
         [-3.6, 0.18, -6.2],
         [-4.2, 0.18, -6.8],
         [-3, 0.18, -6.8],
       ].map(([gx, gy, gz], i) =>
-        world.addItem({ position: [gx, gy, gz], material: glow(SIZES[i], 1.2) }),
+        world.addItem({ position: [gx, gy, gz], material: colours.keep(glow(SIZES[i], 1.2)) }),
       )
 
       // Full size in the open, a quarter in the vault, a sixteenth by the small door.
       const mouse: [number, number, number] = [-5.3, 0, -3.8]
       const sockets = [
-        addSocket(world, { position: [-4.5, 0, -3], colour: SIZES[0], items: gems }),
+        addSocket(world, { position: [-4.5, 0, -3], colour: SIZES[0], items: gems, colours }),
         addSocket(world, {
           position: [vx - 0.8, 0, vz + 0.7],
           width: 0.4,
           size: RATIO,
           colour: ramp(SIZES, 0.5),
           items: gems,
+          colours,
         }),
         addSocket(world, {
           position: mouse,
@@ -140,10 +142,11 @@ export function resizingDoors(
           size: RATIO * RATIO,
           colour: SIZES[3],
           items: gems,
+          colours,
         }),
       ]
       // The mouse-hole: an arch over the smallest socket, so it can be found.
-      const arch = glow(SIZES[3], 1.4)
+      const arch = colours.keep(glow(SIZES[3], 1.4))
       for (const side of [-1, 1]) {
         world.addBox({
           size: [0.03, 0.3, 0.03],
@@ -184,6 +187,7 @@ export function resizingDoors(
         }
         if (filled < sockets.length || solved) return
         solved = true
+        colours.restore()
         beacon(true)
         puzzle.solved()
         refresh()

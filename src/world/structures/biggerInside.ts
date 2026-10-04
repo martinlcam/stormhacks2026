@@ -3,7 +3,15 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { PLANK_TILE, plankMaterial, woodMaterial } from '../foliage'
 import type { Structure } from '../World'
 import { glow, matte, palette } from '../materials'
-import { addBeacon, addRegion, addSocket, type PuzzleEvents, ramp, shine } from '../puzzle'
+import {
+  addBeacon,
+  addColours,
+  addRegion,
+  addSocket,
+  type PuzzleEvents,
+  ramp,
+  shine,
+} from '../puzzle'
 import { FONT_STACK } from '../../font'
 
 /* Detached rooms live far from the hub so they are never seen directly. */
@@ -401,14 +409,16 @@ export function biggerInside(
         })
       }
 
+      const colours = addColours()
       const key = world.addItem({
         position: [ROOM_X + 1, 0.18, -4.4],
-        material: glow(ramp(AMBER, 0.5), 1.3),
+        material: colours.keep(glow(ramp(AMBER, 0.5), 1.3)),
       })
       const socket = addSocket(world, {
         position: [ROOM_X + 0.5, 0, 4.4],
         colour: ramp(AMBER, 0.5),
         items: [key],
+        colours,
       })
       const beacon = addBeacon(world, [ROOM_X - 4.25, 0, 5.2], AMBER)
 
@@ -437,24 +447,26 @@ export function biggerInside(
         socket.show(filled ? 'filled' : 'ready')
         if (!filled || solved) return
         solved = true
+        colours.restore()
         beacon(true)
         puzzle.solved()
         refresh()
       })
 
       // The lesson. A strip along the front of each desk, lit while a gem sits at it.
+      const chalk = addColours()
       const strips = DESK_Z.map((z) =>
         DESK_X.map((x) =>
           world.addBox({
             size: [DESK_WIDTH - 0.1, 0.01, 0.03],
             position: [ROOM_X + x, DESK_TOP + 0.005, z - DESK_DEPTH / 2 + 0.03],
-            material: glow(CHALK, 0.1),
+            material: chalk.keep(glow(CHALK, 0.1)),
             collide: false,
           }),
         ),
       )
       const chalks = [1.4, 2, 2.6, 3.2].map((x) =>
-        world.addItem({ position: [ROOM_X + x, 0.18, 4.6], material: glow(CHALK, 1) }),
+        world.addItem({ position: [ROOM_X + x, 0.18, 4.6], material: chalk.keep(glow(CHALK, 1)) }),
       )
       /* The row and column of the desk a gem is lying on, if it is on one. */
       const seatOf = ({ body }: (typeof chalks)[number]): [number, number] | null => {
@@ -503,6 +515,7 @@ export function biggerInside(
         }
         if (seated < chalks.length || clash) return
         learnt = true
+        chalk.restore()
         for (const strip of strips.flat()) shine(strip, 2)
         lesson.solved()
         report()

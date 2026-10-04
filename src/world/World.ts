@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { Body } from '../engine/Body'
+import { keepColour } from '../engine/film'
 import { type Axis, frameFor } from '../engine/gravity'
 import { assign, POLE, type Site } from '../engine/planet'
 import { Portal } from '../engine/Portal'
@@ -239,6 +240,8 @@ export class World {
     material.userData.rigid = true
     // And carries a little film grain wherever it is.
     material.userData.item = true
+    // And half its colour, if it is not one of a puzzle's things, which have a set of their own.
+    material.userData.keep ??= keepColour()
     mesh.frustumCulled = false
     this.scene.add(mesh)
     const body = new Body(radius)

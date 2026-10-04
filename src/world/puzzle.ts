@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { keepColour, restoreKept } from '../engine/film'
 import { type Axis, frameFor, upVector } from '../engine/gravity'
 import { glow, matte } from './materials'
 import type { Item, World } from './World'
@@ -10,6 +11,29 @@ export interface PuzzleEvents {
   /* The goal to show while the player is at the puzzle, or null once they leave. */
   hint(text: string | null): void
   solved(): void
+}
+
+/*
+  The colours of the things one puzzle is made of. They keep half of their
+  colour while the rest of the world is grey, and have all of it once the
+  puzzle is solved.
+*/
+export interface Colours {
+  /* Make a material one of the puzzle's. Returns the material. */
+  keep<M extends THREE.Material>(material: M): M
+  /* The puzzle is solved: give its things all of their colour. */
+  restore(): void
+}
+
+export function addColours(): Colours {
+  const set = keepColour()
+  return {
+    keep(material) {
+      material.userData.keep = set
+      return material
+    },
+    restore: () => restoreKept(set),
+  }
 }
 
 /* The colour a share `t`, 0 to 1, of the way along a row of colours. */
@@ -50,6 +74,8 @@ export interface SocketOptions {
   colour: number
   /* The gems it takes. */
   items: readonly Item[]
+  /* The colours of the puzzle it is part of. Without them it keeps half its colour for good. */
+  colours?: Colours
 }
 
 export interface Socket {
@@ -67,6 +93,7 @@ const offset = new THREE.Vector3()
 */
 export function addSocket(world: World, options: SocketOptions): Socket {
   const { position, up = 'y+', width = 0.9, size = 1, colour, items } = options
+  const colours = options.colours ?? addColours()
   const site = world.building
   const frame = frameFor(up)
   const upward = upVector(up).clone()
@@ -89,10 +116,10 @@ export function addSocket(world: World, options: SocketOptions): Socket {
   const thick = Math.min(0.03, width * 0.04)
   const edge = width * 0.08
   const inside = width - edge * 2
-  const rim = glow(colour, WAITING)
+  const rim = colours.keep(glow(colour, WAITING))
   // Fit the plate inside the rim and the side rails between the end rails.
   // Overlapping boxes put their outer faces in the same plane and flicker.
-  local([inside, thick, inside], [0, thick / 2, 0], matte(shade(colour, 0.12)))
+  local([inside, thick, inside], [0, thick / 2, 0], colours.keep(matte(shade(colour, 0.12))))
   const reach = (width - edge) / 2
   const rims = [
     local([width, thick * 2, edge], [0, thick, reach], rim),
@@ -125,9 +152,9 @@ export function addSocket(world: World, options: SocketOptions): Socket {
 }
 
 /*
-  A column of blocks coloured along `stops`, bottom to top. It is dim until
-  the puzzle it stands by is solved. `position` is the middle of its foot.
-  Returns the function that lights it.
+  A column of blocks coloured along `stops`, bottom to top. It is dim, and
+  has half its colour, until the puzzle it stands by is solved. `position`
+  is the middle of its foot. Returns the function that lights it.
 */
 export function addBeacon(
   world: World,
@@ -138,11 +165,12 @@ export function addBeacon(
 ): (lit: boolean) => void {
   const count = 8
   const step = height / count
+  const colours = addColours()
   const blocks = Array.from({ length: count }, (_, i) =>
     world.addBox({
       size: [0.3, step - 0.05, 0.3],
       position: [position[0], position[1] + step * (i + 0.5), position[2]],
-      material: glow(ramp(stops, i / (count - 1)), 0.12),
+      material: colours.keep(glow(ramp(stops, i / (count - 1)), 0.12)),
       collide: false,
     }),
   )
@@ -153,6 +181,7 @@ export function addBeacon(
     )
   }
   return (lit) => {
+    if (lit) colours.restore()
     for (const block of blocks) shine(block, lit ? 2.2 : 0.12)
   }
 }

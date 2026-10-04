@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import type { Structure } from '../World'
 import { glow, gridTexture, matte, palette } from '../materials'
-import { addBeacon, addRegion, addSocket, type PuzzleEvents, ramp } from '../puzzle'
+import { addBeacon, addColours, addRegion, addSocket, type PuzzleEvents, ramp } from '../puzzle'
 
 /* Detached rooms live far from the plaza so they are never seen directly. */
 const ROOM_X = -600
@@ -112,28 +112,39 @@ export function gravityRoom(
         collide: false,
       })
 
+      const colours = addColours()
       const gems = [
         [x + 1, 0.18, 2],
         [x - 2.5, 0.18, 2.5],
         [x - 1, 0.18, 3.2],
       ].map(([gx, gy, gz], i) =>
-        world.addItem({ position: [gx, gy, gz], material: glow(ramp(WARM, i / 2), 1.2) }),
+        world.addItem({
+          position: [gx, gy, gz],
+          material: colours.keep(glow(ramp(WARM, i / 2), 1.2)),
+        }),
       )
 
       // One plate on each floor: the floor, the +X wall and the ceiling.
       const plates = [
-        addSocket(world, { position: [x - 3.5, 0, -3.5], colour: ramp(WARM, 0), items: gems }),
+        addSocket(world, {
+          position: [x - 3.5, 0, -3.5],
+          colour: ramp(WARM, 0),
+          items: gems,
+          colours,
+        }),
         addSocket(world, {
           position: [x + HALF, 3.5, 2.5],
           up: 'x-',
           colour: ramp(WARM, 0.5),
           items: gems,
+          colours,
         }),
         addSocket(world, {
           position: [x + 2.5, SIZE, -2.5],
           up: 'y-',
           colour: ramp(WARM, 1),
           items: gems,
+          colours,
         }),
       ]
       // Hangs in the middle of the room, where it is seen from every floor.
@@ -163,6 +174,7 @@ export function gravityRoom(
         }
         if (filled < plates.length || solved) return
         solved = true
+        colours.restore()
         beacon(true)
         puzzle.solved()
         refresh()
