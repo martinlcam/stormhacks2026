@@ -18,6 +18,7 @@ export class PortalItemView {
   private readonly transfer = { value: new THREE.Matrix4() }
   private readonly motion = new THREE.Matrix4()
   private readonly local = new THREE.Vector3()
+  private readonly anchor = new THREE.Vector3()
 
   constructor(
     private readonly mesh: THREE.Mesh,
@@ -25,6 +26,8 @@ export class PortalItemView {
     private readonly baseRadius: number,
     private readonly portals: readonly Portal[],
   ) {
+    if (!mesh.geometry.boundingSphere) mesh.geometry.computeBoundingSphere()
+
     this.material = original.clone()
     this.material.clippingPlanes = [this.nearClip]
     mesh.material = this.material
@@ -37,7 +40,12 @@ export class PortalItemView {
     this.copy.frustumCulled = false
     this.copy.matrixAutoUpdate = false
     this.copy.visible = false
-    mesh.parent!.add(this.copy)
+    // Avatar parts have nested parents; the transported copy is in world space.
+    let root: THREE.Object3D = mesh
+    while (root.parent) root = root.parent
+
+    root.add(this.copy)
+    mesh.userData.portalItemView = this
   }
 
   update() {
@@ -49,10 +57,13 @@ export class PortalItemView {
     this.copy.material.emissiveIntensity = this.original.emissiveIntensity
     const site = siteUniform(this.material).value
     siteUniform(this.copy.material).value = site
-    this.center.copy(this.mesh.position).applyMatrix4(planetMotion(this.mesh.position, this.motion))
-    if (onPlanet(this.mesh.position)) this.center.applyMatrix4(site)
+    this.mesh.updateWorldMatrix(true, false)
+    this.anchor.setFromMatrixPosition(this.mesh.matrixWorld)
+    this.center.copy(this.mesh.geometry.boundingSphere!.center).applyMatrix4(this.mesh.matrixWorld)
+    this.center.applyMatrix4(planetMotion(this.anchor, this.motion))
+    if (onPlanet(this.anchor)) this.center.applyMatrix4(site)
 
-    this.radius = this.baseRadius * this.mesh.scale.x
+    this.radius = this.baseRadius * this.mesh.matrixWorld.getMaxScaleOnAxis()
 
     for (const portal of this.portals) {
       const distance = portal.spacePlane.distanceToPoint(this.center)
@@ -72,8 +83,7 @@ export class PortalItemView {
       this.nearClip.copy(portal.spacePlane)
       this.farClip.copy(portal.target.spacePlane)
       this.transfer.value.copy(portal.view)
-      this.mesh.updateMatrix()
-      this.copy.matrix.copy(this.mesh.matrix)
+      this.copy.matrix.copy(this.mesh.matrixWorld)
       this.copy.visible = this.mesh.visible
       break
     }
@@ -84,6 +94,7 @@ export class PortalItemView {
     this.copy.material.dispose()
     this.material.dispose()
     this.mesh.material = this.original
+    delete this.mesh.userData.portalItemView
   }
 }
 

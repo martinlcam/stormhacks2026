@@ -3,6 +3,7 @@ import type { LightingScene, LightingView } from '../game/lightingScenes'
 import type { LightingSettings } from '../game/lightingSettings'
 import { groundDisk } from './groundDisk'
 import { addLamp } from './lamp'
+import { addLantern } from './lantern'
 import { createSky, matte } from './materials'
 import type { World } from './World'
 
@@ -14,13 +15,13 @@ export const LIGHTING_SPAWN = [0, 0, 3] as const
 
 /*
   Keep the geometry, materials and lighting identical across comparisons.
-  The lamp is the only emissive fixture. No fog, textures, foliage or
-  animated props to hide its contribution to the surrounding surfaces.
+  Lamps can be compared independently against the same neutral fixtures.
 */
 export function buildLightingLab(
   world: World,
   scene: LightingScene,
   view: LightingView = 'default',
+  lanternTexture?: THREE.Texture,
 ) {
   world.planetSize = scene.curved ? CIRCUMFERENCE : null
   // A scene background color clears the stencil between portal passes.
@@ -59,7 +60,7 @@ export function buildLightingLab(
 
   // The doorway view is a repeatable reproduction of shining a held lamp
   // through a portal, without requiring pointer lock or manual positioning.
-  const doorwayView = scene.portals && view === 'doorway'
+  const doorwayView = scene.portals && (view === 'doorway' || view === 'lantern')
   const thresholdView = scene.portals && view === 'threshold'
   const lampX = doorwayView ? 0.7 : 0
   const lampZ = thresholdView ? -6 : doorwayView ? -4.5 : 1
@@ -76,8 +77,18 @@ export function buildLightingLab(
   // Suspend the diagnostic lamp at the threshold until the player picks it up.
   if (thresholdView) emitter.lamp.body.resting = true
 
+  const lanternX = lampX - 1.2
+  world.addBox({
+    size: [0.7, 0.9, 0.7],
+    position: [lanternX, 0.45, lampZ],
+    material: matte(0x636e7c),
+  })
+  const lantern = addLantern(world, [lanternX, 1.3, lampZ], lanternTexture)
+
   return {
     ...emitter,
+    lantern,
+    lights: [...emitter.lights, ...lantern.lights],
     spawn: thresholdView
       ? ([0, 0, -3.5] as const)
       : doorwayView
@@ -85,10 +96,16 @@ export function buildLightingLab(
         : LIGHTING_SPAWN,
 
     /* Run after item movement, once the engine has configured the planet. */
-    update({ lampEnabled, referenceEnabled }: LightingSettings) {
+    update({ lampEnabled, lanternEnabled, referenceEnabled }: LightingSettings, dt = 0) {
       emitter.update(lampEnabled)
+      lantern.update(lanternEnabled, dt)
       sun.intensity = referenceEnabled ? 2.5 : 0
       fill.intensity = referenceEnabled ? 0.35 : 0.1
+    },
+
+    dispose() {
+      emitter.dispose()
+      lantern.dispose()
     },
   }
 }

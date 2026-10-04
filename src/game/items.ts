@@ -12,6 +12,7 @@ import {
 } from '../engine/planet'
 import type { Portal } from '../engine/Portal'
 import { yawDelta } from '../engine/portalMath'
+import { PortalItemView } from '../engine/PortalItemView'
 import type { Item } from '../world/World'
 
 /* How far the player can reach, per unit of their own scale. */
@@ -194,6 +195,7 @@ export class ItemSystem {
   /* The player's scale last frame, to notice when a doorway resizes them. */
   private playerScale = 1
   private readonly abort = new AbortController()
+  private readonly crossings: PortalItemView[] = []
 
   constructor(
     private readonly engine: Pick<Engine, 'world' | 'player'>,
@@ -204,7 +206,22 @@ export class ItemSystem {
 
     for (const item of engine.world.items) {
       item.body.onTraverse = () => events.thrownThrough()
+      item.mesh.userData.shadowCaster = true
+      if (
+        !item.mesh.userData.portalItemView &&
+        item.mesh.material instanceof THREE.MeshStandardMaterial
+      ) {
+        this.crossings.push(
+          new PortalItemView(
+            item.mesh,
+            item.mesh.material,
+            item.body.baseRadius,
+            engine.world.portals,
+          ),
+        )
+      }
     }
+
     const signal = this.abort.signal
     window.addEventListener(
       'keydown',
@@ -231,6 +248,7 @@ export class ItemSystem {
 
   dispose() {
     this.abort.abort()
+    for (const crossing of this.crossings) crossing.dispose()
   }
 
   /* E: pick up what the crosshair is on, or put down what is held. */
@@ -341,6 +359,7 @@ export class ItemSystem {
       }
     }
     if (this.held) this.carry()
+    for (const crossing of this.crossings) crossing.update()
     this.target = this.held ? null : this.aim()
     this.setPrompt(this.held ? 'E  put down  ·  hold Q  throw' : this.target ? 'E  pick up' : null)
   }

@@ -30,14 +30,16 @@ export function LightingLabPanel({
       <p className="mt-2 font-semibold">{scene.title}</p>
       {playing ? (
         <p className="mt-2 text-xs text-bone/65">
-          E to lift the amber lamp · Esc for lighting controls
+          E to lift either light · Esc for lighting controls
         </p>
       ) : (
         <>
           <p className="mt-2 text-bone/75">
-            {view === 'threshold'
-              ? 'The lamp is suspended halfway through the doorway. Toggle it to compare both floors, or pick it up with E.'
-              : scene.description}
+            {view === 'lantern'
+              ? 'The Minecraft lantern is lit on the left pedestal. Pick it up with E and carry its light through the doorway.'
+              : view === 'threshold'
+                ? 'The lamp is suspended halfway through the doorway. Toggle it to compare both floors, or pick it up with E.'
+                : scene.description}
           </p>
           <button
             type="button"
@@ -47,6 +49,12 @@ export function LightingLabPanel({
             Enter scene
           </button>
           <LightingControls />
+          <a
+            href={`?scene=${scene.id}&view=lantern`}
+            className="mt-3 block rounded border border-cyan/40 px-3 py-2 text-center text-cyan hover:bg-cyan/10"
+          >
+            Minecraft lantern test
+          </a>
           {scene.portals && (
             <a
               href={`?scene=${scene.id}${view === 'doorway' ? '' : '&view=doorway'}`}
@@ -99,8 +107,10 @@ export function LightingLabPanel({
 
 function LightingControls() {
   const lampEnabled = useLightingSettings((s) => s.lampEnabled)
+  const lanternEnabled = useLightingSettings((s) => s.lanternEnabled)
   const referenceEnabled = useLightingSettings((s) => s.referenceEnabled)
   const setLampEnabled = useLightingSettings((s) => s.setLampEnabled)
+  const setLanternEnabled = useLightingSettings((s) => s.setLanternEnabled)
   const setReferenceEnabled = useLightingSettings((s) => s.setReferenceEnabled)
 
   return (
@@ -119,14 +129,23 @@ function LightingControls() {
         <input
           type="checkbox"
           className="accent-cyan"
+          checked={lanternEnabled}
+          onChange={(event) => setLanternEnabled(event.target.checked)}
+        />
+        Minecraft lantern
+      </label>
+      <label className="flex cursor-pointer items-center gap-2">
+        <input
+          type="checkbox"
+          className="accent-cyan"
           checked={referenceEnabled}
           onChange={(event) => setReferenceEnabled(event.target.checked)}
         />
         Reference light
       </label>
       <p className="text-xs leading-relaxed text-bone/65">
-        Turn the lamp off and on to compare its light on the floor. Leave the reference light off to
-        isolate it. Cast shadows and light beams come next.
+        Switch each light on its own to compare its light on the floor. Leave the reference light
+        off to isolate it. Cast shadows and light beams come next.
       </p>
     </fieldset>
   )
