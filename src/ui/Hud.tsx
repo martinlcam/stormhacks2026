@@ -1,13 +1,21 @@
 import { useEffect, useState } from 'react'
 import { discoveries } from '../game/discoveries'
 import { useGame } from '../game/store'
+import { PAGE_GRAIN, art } from '../landing/art'
+import { Wash } from './Wash'
 
 const CARD_SECONDS = 12
 const TOTAL = Object.keys(discoveries).length
 /* The ending: how long the last card is left to be read, and how long the fade to white takes. */
 const ENDING_WAIT_SECONDS = 4
 const ENDING_FADE_SECONDS = 3
+/* A stroke of watercolour from the title's green to the water's blue, for anything that fills up. */
+const STROKE = 'linear-gradient(90deg, rgba(205,240,117,0.9), rgba(143,189,230,0.9))'
 
+/*
+  Everything written over the game, each on a sheet of the landing page's
+  watercolour paper, in its inks and Helvetica.
+*/
 export function Hud({
   onPlay,
   showStartScreen = true,
@@ -22,7 +30,7 @@ export function Hud({
   const ended = ending.phase === 'shown'
 
   return (
-    <div className="pointer-events-none absolute inset-0 select-none font-sans text-bone">
+    <div className="pointer-events-none absolute inset-0 font-sans select-none">
       {playing ? <Crosshair /> : showStartScreen && !ended && <StartScreen onPlay={onPlay} />}
       {playing && <Goal />}
       <Stats />
@@ -71,55 +79,75 @@ function useEnding(enabled: boolean) {
   return { phase, dismiss: () => setPhase('dismissed') }
 }
 
+/* The world fades to the landing page's paper, and the ending is written on it. */
 function Ending({ phase, onContinue }: { phase: EndingPhase; onContinue: () => void }) {
   const found = useGame((s) => s.found)
   const white = phase === 'fading' || phase === 'shown'
   const shown = phase === 'shown'
   return (
     <div
-      className={`absolute inset-0 bg-white transition-opacity ease-in ${white ? 'opacity-100' : 'opacity-0'}`}
+      className={`absolute inset-0 bg-paper transition-opacity ease-in ${white ? 'opacity-100' : 'opacity-0'}`}
       style={{ transitionDuration: `${phase === 'dismissed' ? 1 : ENDING_FADE_SECONDS}s` }}
     >
       <div
-        className={`flex h-full flex-col items-center justify-center gap-5 overflow-y-auto px-4 py-8 text-night transition-all duration-1000 ${shown ? 'pointer-events-auto translate-y-0 opacity-100' : 'translate-y-3 opacity-0'}`}
+        className="absolute inset-0 bg-cover bg-center"
+        style={{ backgroundImage: `url(${art.grain})`, opacity: PAGE_GRAIN }}
+      />
+      <div
+        className={`relative flex h-full flex-col items-center justify-center gap-5 overflow-y-auto px-4 py-8 font-light text-caption transition-all duration-1000 ${shown ? 'pointer-events-auto translate-y-0 opacity-100' : 'translate-y-3 opacity-0'}`}
       >
-        <h1 className="bg-linear-to-r from-purple to-cyan bg-clip-text text-6xl font-bold tracking-tight text-transparent">
-          WÚ 無
-        </h1>
-        <p className="text-xl font-semibold">Nothing left to find.</p>
-        <p className="text-sm tracking-widest text-purple uppercase tabular-nums">
+        <h1 className="m-0 text-6xl font-bold tracking-[-0.08em] text-ink">WÚ 無</h1>
+        <p className="m-0 text-2xl tracking-[-0.05em]">nothing left to find.</p>
+        <p className="m-0 text-sm tracking-[-0.02em] tabular-nums">
           {found.length} / {TOTAL} points
         </p>
-        <ul className="grid max-w-2xl grid-cols-1 gap-x-8 gap-y-1 text-sm text-night/70 sm:grid-cols-2">
+        <ul className="m-0 grid max-w-2xl list-none grid-cols-1 gap-x-8 gap-y-1 p-0 text-sm tracking-[-0.02em] sm:grid-cols-2">
           {found.map((id) => (
             <li key={id}>
-              <span className="text-purple">✓</span> {discoveries[id].title}
+              <span className="text-ink">✓</span> {discoveries[id].title}
             </li>
           ))}
         </ul>
-        <p className="max-w-md text-center text-sm text-night/60">
-          Every room here was ordinary. Only the way they were joined together was not.
+        <p className="m-0 max-w-md text-center text-sm tracking-[-0.02em] opacity-80">
+          every room here was ordinary. only the way they were joined together was not.
         </p>
         <div className="flex gap-3">
-          <button
-            type="button"
-            onClick={onContinue}
-            tabIndex={shown ? 0 : -1}
-            className="cursor-pointer rounded-full border border-night/20 px-5 py-2 text-sm font-semibold hover:bg-night/5"
-          >
-            Keep exploring
-          </button>
-          <button
-            type="button"
-            onClick={() => location.reload()}
-            tabIndex={shown ? 0 : -1}
-            className="cursor-pointer rounded-full bg-night px-5 py-2 text-sm font-semibold text-bone hover:bg-night/85"
-          >
-            Play again
-          </button>
+          <PaperButton onClick={onContinue} focusable={shown} seed={31}>
+            keep exploring
+          </PaperButton>
+          <PaperButton onClick={() => location.reload()} focusable={shown} seed={37} bloom>
+            play again
+          </PaperButton>
         </div>
       </div>
     </div>
+  )
+}
+
+/* A button written on a scrap of watercolour paper. */
+function PaperButton({
+  onClick,
+  focusable,
+  seed,
+  bloom = false,
+  children,
+}: {
+  onClick: () => void
+  focusable: boolean
+  seed: number
+  bloom?: boolean
+  children: string
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      tabIndex={focusable ? 0 : -1}
+      className="relative cursor-pointer border-0 bg-transparent px-8 py-4 text-sm font-light tracking-[-0.03em] text-ink transition-transform hover:scale-105"
+    >
+      <Wash rough={9} seed={seed} radius={16} blooms={bloom ? ['blue'] : []} />
+      <span className="relative">{children}</span>
+    </button>
   )
 }
 
@@ -127,21 +155,35 @@ function Ending({ phase, onContinue }: { phase: EndingPhase; onContinue: () => v
 function Points() {
   const found = useGame((s) => s.found.length)
   return (
-    <div className="absolute top-3 left-4 rounded-2xl border border-bone/15 bg-night/75 px-4 py-2 backdrop-blur">
-      <div className="text-[0.65rem] font-semibold tracking-widest text-cyan uppercase">Points</div>
-      <div className="text-2xl leading-tight font-bold tabular-nums">
-        {/* Keyed by the score, so that each new point plays the pulse again. */}
-        <span key={found} className={found > 0 ? 'inline-block animate-[point_0.6s_ease-out]' : ''}>
-          {found}
-        </span>
-        <span className="text-base font-normal text-bone/50"> / {TOTAL}</span>
+    <div className="absolute top-2 left-2 px-7 pt-4 pb-5">
+      <Wash rough={14} seed={5} radius={22} blooms={['green']} />
+      <div className="relative">
+        <div className="text-xs font-light tracking-[-0.02em] text-caption">points</div>
+        <div className="text-3xl leading-tight font-light tracking-[-0.06em] text-ink tabular-nums">
+          {/* Keyed by the score, so that each new point plays the pulse again. */}
+          <span
+            key={found}
+            className={found > 0 ? 'inline-block animate-[point_0.6s_ease-out]' : ''}
+          >
+            {found}
+          </span>
+          <span className="text-base text-caption opacity-70"> / {TOTAL}</span>
+        </div>
+        <Stroke fill={found / TOTAL} className="mt-1.5 w-28" track="bg-caption/30" />
       </div>
-      <div className="mt-1 h-1 w-24 overflow-hidden rounded-full bg-bone/15">
-        <div
-          className="h-full bg-linear-to-r from-purple to-cyan transition-[width] duration-700"
-          style={{ width: `${(found / TOTAL) * 100}%` }}
-        />
-      </div>
+    </div>
+  )
+}
+
+/* A pencil line, with a stroke of watercolour along it as far as `fill` (0 to 1). */
+function Stroke({ fill, className, track }: { fill: number; className: string; track: string }) {
+  return (
+    <div className={`relative h-1.5 ${className}`}>
+      <div className={`absolute inset-x-0 top-1/2 h-px ${track}`} />
+      <div
+        className="absolute inset-y-0 left-0 rounded-full transition-[width] duration-700"
+        style={{ width: `${fill * 100}%`, background: STROKE }}
+      />
     </div>
   )
 }
@@ -153,85 +195,86 @@ function Crosshair() {
     <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
       <div className="size-1.5 rounded-full bg-bone/80 ring-1 ring-black/40" />
       {charge !== null && (
-        <div className="absolute top-4 left-1/2 h-1.5 w-28 -translate-x-1/2 overflow-hidden rounded-full bg-black/50 ring-1 ring-bone/20">
-          <div
-            className="h-full bg-linear-to-r from-cyan to-purple"
-            style={{ width: `${charge * 100}%` }}
-          />
+        <div className="absolute top-4 left-1/2 -translate-x-1/2">
+          <Stroke fill={charge} className="w-28" track="bg-bone/50" />
         </div>
       )}
       {prompt && (
-        <div className="absolute top-8 left-1/2 -translate-x-1/2 rounded bg-black/60 px-2 py-1 text-sm whitespace-nowrap">
-          {prompt}
+        <div className="absolute top-8 left-1/2 -translate-x-1/2 px-5 py-2.5 whitespace-nowrap">
+          <Wash rough={7} seed={9} radius={12} />
+          <span className="relative text-sm font-light tracking-[-0.03em] text-ink">{prompt}</span>
         </div>
       )}
     </div>
   )
 }
 
-/* The goals of the puzzles the player is standing at. */
+/* The goals of the puzzles the player is standing at, each on a strip of paper. */
 function Goal() {
   const goal = useGame((s) => s.goal)
   if (!goal) return null
   return (
-    <div className="absolute top-3 left-1/2 flex w-max max-w-[min(36rem,calc(100%-20rem))] -translate-x-1/2 flex-col items-center gap-1.5">
-      {goal.split('\n').map((line) => (
-        <div
-          key={line}
-          className="rounded-2xl border border-bone/15 bg-night/75 px-4 py-1.5 text-center text-sm text-bone/90 backdrop-blur"
-        >
-          {line}
+    <div className="absolute top-2 left-1/2 flex w-max max-w-[min(38rem,calc(100%-20rem))] -translate-x-1/2 flex-col items-center">
+      {goal.split('\n').map((line, i) => (
+        <div key={line} className="relative px-7 py-3 text-center">
+          <Wash rough={9} seed={11 + i * 4} radius={14} />
+          <span className="relative text-sm font-light tracking-[-0.03em] text-ink">{line}</span>
         </div>
       ))}
     </div>
   )
 }
 
+/* What the game is and how to play it, while the mouse is free. A click anywhere goes on. */
 function StartScreen({ onPlay }: { onPlay: () => void }) {
   return (
     <button
       type="button"
       onClick={onPlay}
-      className="pointer-events-auto absolute inset-0 flex cursor-pointer flex-col items-center justify-center gap-6 bg-night/70 backdrop-blur-sm"
+      className="pointer-events-auto absolute inset-0 flex cursor-pointer items-center justify-center border-0 bg-night/55 p-4 backdrop-blur-[2px]"
     >
-      <h1 className="bg-linear-to-r from-purple to-cyan bg-clip-text text-6xl font-bold tracking-tight text-transparent">
-        WÚ 無
-      </h1>
-      <p className="text-lg text-bone/80">Click to enter</p>
-      <p className="max-w-sm px-4 text-center text-sm text-bone/80">
-        You start holding the amber lamp. Carry its light through the doorways, press E to put it
-        down, or hold Q to throw it. There’s also a Minecraft lantern on the ground to your left.
-      </p>
-      <dl className="grid grid-cols-[auto_auto] gap-x-4 gap-y-1 text-left text-sm text-bone/60">
-        <dt className="font-medium text-cyan">WASD</dt>
-        <dd>move</dd>
-        <dt className="font-medium text-cyan">Mouse</dt>
-        <dd>look</dd>
-        <dt className="font-medium text-cyan">Shift</dt>
-        <dd>run</dd>
-        <dt className="font-medium text-cyan">Space</dt>
-        <dd>jump</dd>
-        <dt className="font-medium text-cyan">E</dt>
-        <dd>pick up / put down</dd>
-        <dt className="font-medium text-cyan">Q</dt>
-        <dd>throw (hold to charge)</dd>
-        <dt className="font-medium text-cyan">R</dt>
-        <dd>back to the start</dd>
-        <dt className="font-medium text-cyan">M</dt>
-        <dd>sound off / on</dd>
-        <dt className="font-medium text-cyan">Esc</dt>
-        <dd>release mouse</dd>
-      </dl>
+      <div className="relative w-[min(30rem,100%)] px-14 pt-12 pb-14 text-left font-light text-caption">
+        <Wash rough={34} seed={2} radius={40} blooms={['green', 'blue']} />
+        <div className="relative">
+          <h1 className="m-0 text-5xl font-bold tracking-[-0.08em] text-ink">WÚ 無</h1>
+          <p className="mt-2 mb-0 text-lg tracking-[-0.04em]">click to enter</p>
+          <p className="mt-4 mb-0 text-sm leading-relaxed tracking-[-0.02em]">
+            you start holding the amber lamp. carry its light through the doorways, press E to put
+            it down, or hold Q to throw it. there’s also a Minecraft lantern on the ground to your
+            left.
+          </p>
+          <dl className="mt-5 mb-0 grid grid-cols-[auto_1fr] gap-x-5 gap-y-1 text-sm tracking-[-0.02em]">
+            {CONTROLS.map(([keys, what]) => (
+              <div key={keys} className="contents">
+                <dt className="font-medium text-ink">{keys}</dt>
+                <dd className="m-0">{what}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      </div>
     </button>
   )
 }
+
+const CONTROLS = [
+  ['WASD', 'move'],
+  ['mouse', 'look'],
+  ['shift', 'run'],
+  ['space', 'jump'],
+  ['E', 'pick up / put down'],
+  ['Q', 'throw (hold to charge)'],
+  ['R', 'back to the start'],
+  ['M', 'sound off / on'],
+  ['esc', 'free the mouse'],
+] as const
 
 function Stats() {
   const fps = useGame((s) => s.fps)
   const passes = useGame((s) => s.passes)
   const scale = useGame((s) => s.scale)
   return (
-    <div className="absolute top-3 right-4 text-right text-xs text-bone/50 tabular-nums">
+    <div className="absolute top-3 right-4 text-right text-xs font-light text-bone/50 tabular-nums">
       <div>
         {fps} fps · {passes} views
       </div>
@@ -244,6 +287,7 @@ function formatScale(scale: number) {
   return scale < 1 ? `1/${Math.round(1 / scale)}` : `×${Math.round(scale)}`
 }
 
+/* What the player has just found, and the maths of it, on a sheet of paper at the bottom. */
 function DiscoveryCard() {
   const card = useGame((s) => s.card)
   const dismiss = useGame((s) => s.dismissCard)
@@ -256,11 +300,18 @@ function DiscoveryCard() {
 
   if (!card) return null
   return (
-    <div className="absolute bottom-8 left-1/2 w-[min(32rem,calc(100%-2rem))] -translate-x-1/2 rounded-lg border border-purple/40 bg-night/85 p-5 shadow-2xl backdrop-blur">
-      <div className="text-xs font-semibold tracking-widest text-cyan uppercase">Discovered</div>
-      <h2 className="mt-1 text-xl font-bold">{card.title}</h2>
-      <p className="mt-2 text-bone/90">{card.body}</p>
-      <p className="mt-2 text-sm text-bone/60">{card.maths}</p>
+    <div className="absolute bottom-5 left-1/2 w-[min(34rem,calc(100%-2rem))] -translate-x-1/2 px-11 pt-9 pb-10 font-light text-caption transition-opacity duration-700 starting:opacity-0">
+      <Wash rough={28} seed={14} radius={34} blooms={['yellow', 'blue']} />
+      <div className="relative">
+        <div className="text-xs tracking-[-0.01em]">discovered</div>
+        <h2 className="mt-1 mb-0 text-2xl leading-tight font-light tracking-[-0.06em] text-ink">
+          {card.title}
+        </h2>
+        <p className="mt-2 mb-0 text-[0.95rem] leading-relaxed tracking-[-0.02em]">{card.body}</p>
+        <p className="mt-2 mb-0 text-sm leading-relaxed tracking-[-0.01em] opacity-75">
+          {card.maths}
+        </p>
+      </div>
     </div>
   )
 }

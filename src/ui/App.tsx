@@ -8,6 +8,7 @@ import { FlagsPanel } from './FlagsPanel'
 import { Hud } from './Hud'
 import { LightingLabPanel } from './LightingLabPanel'
 import { Onboarding } from './Onboarding'
+import { Wash } from './Wash'
 
 const lightingScene = readLightingScene(window.location.search)
 const lightingView = readLightingView(window.location.search)
@@ -150,9 +151,12 @@ function Game({
         <button
           type="button"
           onClick={capture}
-          className="absolute inset-0 flex cursor-pointer items-end justify-center pb-[14dvh] text-sm tracking-[0.3em] text-bone/60"
+          className="absolute inset-0 flex cursor-pointer items-end justify-center border-0 bg-transparent pb-[12dvh]"
         >
-          click to look around
+          <span className="relative px-8 py-4 text-sm font-light tracking-[-0.02em] text-ink">
+            <Wash rough={10} seed={23} radius={14} />
+            <span className="relative">click to look around</span>
+          </span>
         </button>
       )}
       <LightingLabPanel scene={lightingScene} view={lightingView} onPlay={capture} />

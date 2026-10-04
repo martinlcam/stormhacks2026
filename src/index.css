@@ -7,6 +7,10 @@
   --color-cyan: #6ecbf5;
   --color-night: #120a1c;
   --color-bone: #e8e2f0;
+  /* The landing page's inks and paper, for everything written on watercolour paper. */
+  --color-ink: #434343;
+  --color-caption: #584747;
+  --color-paper: #f7f4ee;
 }
 
 html,
@@ -22,7 +26,7 @@ body,
 @keyframes point {
   0% {
     transform: scale(1.8);
-    color: var(--color-cyan);
+    color: #6f9a2e;
   }
   100% {
     transform: scale(1);
