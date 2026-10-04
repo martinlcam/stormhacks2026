@@ -9,9 +9,11 @@ import {
   redirect,
   seenFrom,
   siteUniform,
+  type Site,
 } from '../engine/planet'
 import type { Portal } from '../engine/Portal'
 import { yawDelta } from '../engine/portalMath'
+import { sweepSphereBox } from '../engine/sweep'
 import type { Item } from '../world/World'
 
 /* How far the player can reach, per unit of their own scale. */
@@ -20,8 +22,6 @@ const REACH = 3
 const HOLD_AHEAD = 0.85
 const HOLD_RIGHT = 0.34
 const HOLD_BELOW = 0.3
-/* Never pull a held item closer to the eye than this. */
-const HOLD_MIN = 0.25
 /* Throw speed for the lightest tap and for a full charge, per unit of scale. */
 const THROW_MIN = 3
 const THROW_MAX = 18
@@ -118,6 +118,10 @@ const launch = new THREE.Vector3()
 const sideways = new THREE.Vector3()
 const spin = new THREE.Vector3()
 const UP = new THREE.Vector3(0, 1, 0)
+const carryNormal = new THREE.Vector3()
+const carryInverse = new THREE.Matrix4()
+const beforePush = new THREE.Vector3()
+const beforeOtherPush = new THREE.Vector3()
 
 /* Distance along a ray to where it enters a box, or Infinity. */
 function rayBox(from: THREE.Vector3, dir: THREE.Vector3, box: THREE.Box3): number {
@@ -299,13 +303,15 @@ export class ItemSystem {
       }
       // The figure is solid: thrown things bounce off it and it kicks what it walks into.
       if (body.site === player.site) {
-        body.hitCylinder(
+        beforePush.copy(body.position)
+        const pushed = body.hitCylinder(
           player.position,
           player.up,
           FIGURE_RADIUS * player.scale,
           FIGURE_HEIGHT * player.scale,
           player.velocity,
         )
+        if (pushed) body.constrainPush(beforePush, world.colliders, world.portals)
       }
       if (body.position.y < -40) {
         body.position.copy(item.home)
@@ -315,9 +321,6 @@ export class ItemSystem {
         body.scale = 1
         body.resting = false
       }
-      mesh.position.copy(body.position)
-      mesh.scale.setScalar(body.scale)
-      siteUniform(mesh.material as THREE.Material).value = body.site.motion
     }
 
     // Loose items knock into each other.
@@ -327,8 +330,22 @@ export class ItemSystem {
       for (let j = i + 1; j < world.items.length; j++) {
         const b = world.items[j]
         if (b === this.held || a.body.site !== b.body.site) continue
-        if (a.body.up.dot(b.body.up) > 0.9) a.body.hitBall(b.body)
+        if (a.body.up.dot(b.body.up) <= 0.9) continue
+        beforePush.copy(a.body.position)
+        beforeOtherPush.copy(b.body.position)
+
+        if (a.body.hitBall(b.body)) {
+          a.body.constrainPush(beforePush, world.colliders, world.portals)
+          b.body.constrainPush(beforeOtherPush, world.colliders, world.portals)
+        }
       }
+    }
+
+    // Draw positions after all contact corrections, not one frame behind them.
+    for (const { body, mesh } of world.items) {
+      mesh.position.copy(body.position)
+      mesh.scale.setScalar(body.scale)
+      siteUniform(mesh.material as THREE.Material).value = body.site.motion
     }
 
     if (this.charging !== null) {
@@ -352,33 +369,39 @@ export class ItemSystem {
     hold.copy(eye).addScaledVector(look, HOLD_AHEAD * player.scale)
     hold.addScaledVector(player.right(sideways), HOLD_RIGHT * player.scale)
     hold.addScaledVector(player.up, -HOLD_BELOW * player.scale)
+    // Collide in the same map coordinates as the solids and loose bodies.
+    placedFrom(player.position, hold, hold)
 
     direction.subVectors(hold, eye)
     const length = direction.length()
     direction.divideScalar(length)
 
     this.heldThrough = null
+    let doorwayAt = length
     for (const portal of world.portals) {
       if (portal.site !== player.site) continue
       const size = body.radius * 2
-      if (portal.fits(size, size) && rayPortal(eye, direction, length, portal) < Infinity) {
+      const distance = rayPortal(eye, direction, length, portal)
+      if (portal.fits(size, size) && distance < doorwayAt) {
         this.heldThrough = portal
-        break
+        doorwayAt = distance
       }
-    }
-    if (!this.heldThrough) {
-      // Stop short of anything solid, leaving room for the item itself.
-      let free = length
-      for (const box of world.colliders) {
-        if (elsewhere(box, player.site)) continue
-        free = Math.min(free, rayBox(eye, direction, box) - body.radius)
-      }
-      hold.copy(eye).addScaledVector(direction, Math.max(HOLD_MIN * player.scale, free))
     }
 
-    hand.copy(hold)
-    // `hold` is in the frame around the player; the body lives on the map.
-    placedFrom(player.position, hold, hold)
+    this.stopHeldAtWalls(eye, hold, body.radius, player.site, this.heldThrough)
+    if (eye.distanceTo(hold) < doorwayAt) this.heldThrough = null
+
+    if (this.heldThrough) {
+      const portal = this.heldThrough
+      point.copy(eye).addScaledVector(direction, doorwayAt).applyMatrix4(portal.transform)
+      seen.copy(hold).applyMatrix4(portal.transform)
+      const radius = body.radius * (portal.target.scale / portal.scale)
+      this.stopHeldAtWalls(point, seen, radius, portal.target.site, portal.target)
+      hold.copy(seen).applyMatrix4(carryInverse.copy(portal.transform).invert())
+    }
+
+    // Throw aiming uses the local view frame; the held body stays on the map.
+    seenFrom(player.position, hold, hand)
     body.position.copy(hold)
     body.site = player.site
     body.yaw = player.yaw
@@ -395,6 +418,24 @@ export class ItemSystem {
       mesh.scale.multiplyScalar(portal.target.scale / portal.scale)
       mesh.rotation.y += yawDelta(portal.transform)
     }
+  }
+
+  /* Sweep the full sphere, including at an angle and beyond a doorway. */
+  private stopHeldAtWalls(
+    from: THREE.Vector3,
+    to: THREE.Vector3,
+    radius: number,
+    site: Site,
+    doorway: Portal | null,
+  ) {
+    let free = 1
+
+    for (const box of this.engine.world.colliders) {
+      if (elsewhere(box, site) || doorway?.ghostColliders.has(box)) continue
+      free = Math.min(free, sweepSphereBox(from, to, radius, box, carryNormal))
+    }
+
+    if (free < 1) to.lerpVectors(from, to, Math.max(0, free - 1e-6))
   }
 
   /* Let go of the held item, moving away from the eye at `speed`. */

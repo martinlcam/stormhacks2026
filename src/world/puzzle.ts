@@ -88,14 +88,17 @@ export function addSocket(world: World, options: SocketOptions): Socket {
 
   const thick = Math.min(0.03, width * 0.04)
   const edge = width * 0.08
+  const inside = width - edge * 2
   const rim = glow(colour, WAITING)
-  local([width, thick, width], [0, thick / 2, 0], matte(shade(colour, 0.12)))
+  // Fit the plate inside the rim and the side rails between the end rails.
+  // Overlapping boxes put their outer faces in the same plane and flicker.
+  local([inside, thick, inside], [0, thick / 2, 0], matte(shade(colour, 0.12)))
   const reach = (width - edge) / 2
   const rims = [
     local([width, thick * 2, edge], [0, thick, reach], rim),
     local([width, thick * 2, edge], [0, thick, -reach], rim),
-    local([edge, thick * 2, width], [reach, thick, 0], rim),
-    local([edge, thick * 2, width], [-reach, thick, 0], rim),
+    local([edge, thick * 2, inside], [reach, thick, 0], rim),
+    local([edge, thick * 2, inside], [-reach, thick, 0], rim),
   ]
 
   return {

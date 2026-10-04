@@ -245,15 +245,22 @@ export class PlayerController {
       this.collide(colliders, colliders, doorway)
       return
     }
+
     let framed = this.framed.get(this.axis)
     if (!framed || framed.source !== colliders || framed.boxes.length !== colliders.length) {
-      const inverse = inverseFrameFor(this.axis)
       framed = {
         source: colliders,
-        boxes: colliders.map((box) => box.clone().applyMatrix4(inverse)),
+        boxes: colliders.map(() => new THREE.Box3()),
       }
       this.framed.set(this.axis, framed)
     }
+
+    // Puzzle barriers move their existing boxes; cached bounds must move too.
+    const inverse = inverseFrameFor(this.axis)
+    for (let i = 0; i < colliders.length; i++) {
+      framed.boxes[i].copy(colliders[i]).applyMatrix4(inverse)
+    }
+
     this.position.applyMatrix4(inverseFrameFor(this.axis))
     this.velocity.applyMatrix4(inverseFrameFor(this.axis))
     this.collide(framed.boxes, colliders, doorway)
@@ -276,7 +283,7 @@ export class PlayerController {
     const radius = RADIUS * this.scale
     const height = HEIGHT * this.scale
     const stepHeight = STEP_HEIGHT * this.scale
-    let ground = -Infinity
+    const previousFeet = before.dot(this.up)
 
     for (let i = 0; i < boxes.length; i++) {
       const box = boxes[i]
@@ -291,12 +298,22 @@ export class PlayerController {
       if (distSq >= radius * radius) continue
 
       // Low enough to stand on or step up: it's floor, not wall.
-      if (box.max.y <= p.y + stepHeight) {
-        // Only the middle of the footprint counts, so you can't hover on edges.
-        if (distSq < radius * radius * 0.25) ground = Math.max(ground, box.max.y)
+      const canStep =
+        box.max.y <= p.y + stepHeight &&
+        (box.max.y <= previousFeet + 1e-6 * this.scale ||
+          this.canStandAt(box.max.y, boxes, originals, doorway))
+      if (canStep) continue
+      if (box.min.y >= p.y + height) continue
+
+      // Coming from below means a head bump, not a wall hit. Pushing out
+      // sideways here can eject the player across an entire ceiling slab.
+      const headroom = box.min.y - height
+      // Leave room for roundoff when collision is rotated into another up.
+      if (previousFeet <= headroom + 1e-6 * this.scale) {
+        p.y = headroom
+        this.velocity.y = Math.min(this.velocity.y, 0)
         continue
       }
-      if (box.min.y >= p.y + height) continue
 
       if (distSq > 1e-10) {
         const dist = Math.sqrt(distSq)
@@ -317,12 +334,57 @@ export class PlayerController {
       }
     }
 
+    // Wall pushes can move the foot onto or away from a ledge. Find support
+    // at the final footprint, including the rim, rather than an earlier one.
+    let ground = -Infinity
+    if (this.velocity.y <= 0) {
+      for (let i = 0; i < boxes.length; i++) {
+        const box = boxes[i]
+        if (doorway?.ghostColliders.has(originals[i]) || elsewhere(originals[i], this.site))
+          continue
+        if (box.max.y > p.y + stepHeight) continue
+        const dx = p.x - Math.max(box.min.x, Math.min(p.x, box.max.x))
+        const dz = p.z - Math.max(box.min.z, Math.min(p.z, box.max.z))
+        if (dx * dx + dz * dz >= radius * radius) continue
+        if (
+          box.max.y > previousFeet + 1e-6 * this.scale &&
+          !this.canStandAt(box.max.y, boxes, originals, doorway)
+        )
+          continue
+        ground = Math.max(ground, box.max.y)
+      }
+    }
+
     this.onGround = false
     if (this.velocity.y <= 0 && p.y <= ground) {
       p.y = ground
       this.velocity.y = 0
       this.onGround = true
     }
+  }
+
+  /* A step is walkable only if raising the whole body leaves it clear of solids. */
+  private canStandAt(
+    feet: number,
+    boxes: readonly THREE.Box3[],
+    originals: readonly THREE.Box3[],
+    doorway: Portal | undefined,
+  ) {
+    const p = this.position
+    const radius = RADIUS * this.scale
+    const head = feet + HEIGHT * this.scale
+    const margin = 1e-6 * this.scale
+
+    for (let i = 0; i < boxes.length; i++) {
+      const box = boxes[i]
+      if (doorway?.ghostColliders.has(originals[i]) || elsewhere(originals[i], this.site)) continue
+      if (box.max.y <= feet + margin || box.min.y >= head - margin) continue
+      const dx = p.x - Math.max(box.min.x, Math.min(p.x, box.max.x))
+      const dz = p.z - Math.max(box.min.z, Math.min(p.z, box.max.z))
+      if (dx * dx + dz * dz < radius * radius - margin * margin) return false
+    }
+
+    return true
   }
 
   /*
