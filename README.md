@@ -5,8 +5,7 @@
 - Build the spherical district: square rooms, three rooms at each corner.
 - Build the hyperbolic district: square rooms, five rooms at each corner.
 - Add a generator that makes hyperbolic rooms when the player comes near.
-- Let portals have any angle, and turn gravity when the player goes through.
-- Build the Escher room where walls become floors.
+- Add stairs and more surfaces to the gravity room.
 - Build the tesseract house: eight cube rooms connected as the cells of a hypercube.
 - Add a 4D sculpture that turns in the plaza.
 - Build the endless stairwell.

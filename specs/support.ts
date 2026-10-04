@@ -1,6 +1,7 @@
 import { expect } from 'bun:test'
 import * as THREE from 'three'
 import { Body } from '../src/engine/Body'
+import type { Axis } from '../src/engine/gravity'
 import { Portal } from '../src/engine/Portal'
 
 export const FRAME = 1 / 60
@@ -18,6 +19,18 @@ export function door(x: number, z: number, yaw: number, scale = 1): Portal {
     width: 1.2,
     height: 2.2,
     scale,
+  })
+}
+
+/* A door standing on some surface other than the floor. */
+export function doorOn(up: Axis, position: [number, number, number], yaw: number): Portal {
+  return new Portal({
+    name: `door on ${up}`,
+    position: new THREE.Vector3(...position),
+    yaw,
+    up,
+    width: 1.2,
+    height: 2.2,
   })
 }
 

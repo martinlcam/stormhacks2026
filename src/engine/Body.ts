@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { axisOf, upVector } from './gravity'
 import { onPlanet, walkOnPlanet } from './planet'
 import type { Portal } from './Portal'
 import { yawDelta } from './portalMath'
@@ -34,6 +35,11 @@ export class Body {
   readonly velocity = new THREE.Vector3()
   /* A heading that is carried along with the ball, for whatever is drawn. */
   yaw = 0
+  /*
+    Which way is up for the ball; it falls the other way. A portal that
+    turns things turns this too. On the planet it is always +y.
+  */
+  readonly up = new THREE.Vector3(0, 1, 0)
   /* Size multiplier. Resizing portals change it. */
   scale = 1
   /* True once the ball has stopped; physics is skipped until it is woken. */
@@ -55,13 +61,15 @@ export class Body {
     this.velocity.transformDirection(portal.transform).multiplyScalar(speed)
     this.yaw += yawDelta(portal.transform)
     this.scale *= ratio
+    this.up.transformDirection(portal.transform)
+    this.up.copy(onPlanet(this.position) ? upVector('y+') : upVector(axisOf(this.up)))
   }
 
   step(dt: number, colliders: readonly THREE.Box3[], portals: readonly Portal[]) {
     if (this.resting) return
     // Gravity scales with the ball, as it does for the player, so a ball
     // shrunk by a doorway moves the way a full-size ball does to full-size eyes.
-    this.velocity.y -= GRAVITY * this.scale * dt
+    this.velocity.addScaledVector(this.up, -GRAVITY * this.scale * dt)
 
     // Never move more than half a radius at once, or thin walls are skipped.
     const distance = this.velocity.length() * dt
@@ -86,9 +94,12 @@ export class Body {
     if (!jumped) this.traverse(portals)
 
     if (grounded) {
-      const drag = Math.exp(-ROLL_DRAG * dt)
-      this.velocity.x *= drag
-      this.velocity.z *= drag
+      // Slow the motion along the ground, not the motion towards or away from it.
+      const rising = this.velocity.dot(this.up)
+      this.velocity
+        .addScaledVector(this.up, -rising)
+        .multiplyScalar(Math.exp(-ROLL_DRAG * dt))
+        .addScaledVector(this.up, rising)
       if (this.velocity.length() < REST_SPEED * this.scale) {
         this.velocity.set(0, 0, 0)
         this.resting = true
@@ -133,7 +144,7 @@ export class Body {
         const bounce = -into > DEAD_SPEED * this.scale ? BOUNCE : 0
         this.velocity.addScaledVector(normal, -(1 + bounce) * into)
       }
-      if (normal.y > 0.7) grounded = true
+      if (normal.dot(this.up) > 0.7) grounded = true
     }
     return grounded
   }

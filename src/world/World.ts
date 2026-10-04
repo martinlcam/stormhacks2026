@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { Body } from '../engine/Body'
+import { type Axis, frameFor } from '../engine/gravity'
 import { Portal } from '../engine/Portal'
 
 type Vec3 = readonly [number, number, number]
@@ -20,8 +21,16 @@ export interface DoorOptions {
   name: string
   /* Bottom centre of the opening. */
   position: Vec3
-  /* Which way the front faces, in quarter turns: 0 = +Z, 1 = +X, 2 = -Z, 3 = -X. */
+  /*
+    Which way the front faces, in quarter turns about the door's up. For an
+    upright door: 0 = +Z, 1 = +X, 2 = -Z, 3 = -X.
+  */
   facing: 0 | 1 | 2 | 3
+  /*
+    Which way is up for the door. Anything but the default 'y+' stands the
+    door on a wall or the ceiling, and whoever comes out of it stands there too.
+  */
+  up?: Axis
   width?: number
   height?: number
   /* Shrinks or grows the whole door, frame included. Defaults to 1. */
@@ -109,24 +118,23 @@ export class World {
   */
   addDoor(options: DoorOptions): Portal {
     const { position, facing, width = 1.2, height = 2.2, scale = 1, frameMaterial } = options
+    const up = options.up ?? 'y+'
     const yaw = (facing * Math.PI) / 2
-    const cos = Math.round(Math.cos(yaw))
-    const sin = Math.round(Math.sin(yaw))
-    const sideways = facing % 2 === 1
+    // Door-local → world. It is always a quarter-turn rotation, so a box
+    // that is axis-aligned in the door's frame is axis-aligned in the world.
+    const rotation = new THREE.Matrix4().makeRotationY(yaw).premultiply(frameFor(up))
+    const corner = new THREE.Vector3()
 
     // Place an axis-aligned box given in the door's local frame.
-    const local = (size: Vec3, at: Vec3, material: THREE.Material) =>
-      this.addBox({
-        size: sideways
-          ? [size[2] * scale, size[1] * scale, size[0] * scale]
-          : [size[0] * scale, size[1] * scale, size[2] * scale],
-        position: [
-          position[0] + (at[0] * cos + at[2] * sin) * scale,
-          position[1] + at[1] * scale,
-          position[2] + (-at[0] * sin + at[2] * cos) * scale,
-        ],
+    const local = (size: Vec3, at: Vec3, material: THREE.Material) => {
+      corner.set(...size).applyMatrix4(rotation)
+      const centre = new THREE.Vector3(...at).multiplyScalar(scale).applyMatrix4(rotation)
+      return this.addBox({
+        size: [Math.abs(corner.x) * scale, Math.abs(corner.y) * scale, Math.abs(corner.z) * scale],
+        position: [position[0] + centre.x, position[1] + centre.y, position[2] + centre.z],
         material,
       })
+    }
 
     const post = 0.15
     // The whole frame sits just behind the portal plane. Nothing may reach
@@ -150,6 +158,7 @@ export class World {
       name: options.name,
       position: new THREE.Vector3(...position),
       yaw,
+      up,
       width,
       height,
       scale,

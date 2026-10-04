@@ -62,12 +62,12 @@ export function throwVelocity(
   speed: number,
   gravity: number,
   out: THREE.Vector3,
+  up: THREE.Vector3 = UP,
 ): THREE.Vector3 {
   out.subVectors(target, hand)
   const flight = out.length() / speed
   out.normalize().multiplyScalar(speed)
-  out.y += Math.min(0.5 * gravity * flight, MAX_LOB * speed)
-  return out
+  return out.addScaledVector(up, Math.min(0.5 * gravity * flight, MAX_LOB * speed))
 }
 
 export interface ItemEvents {
@@ -93,6 +93,7 @@ const seen = new THREE.Vector3()
 const hand = new THREE.Vector3()
 const mark = new THREE.Vector3()
 const launch = new THREE.Vector3()
+const sideways = new THREE.Vector3()
 const spin = new THREE.Vector3()
 const UP = new THREE.Vector3(0, 1, 0)
 
@@ -260,15 +261,16 @@ export class ItemSystem {
       if (!body.resting) {
         body.step(dt, world.colliders, world.portals)
         // Roll: turn about the axis at right angles to the direction of travel.
-        const speed = Math.hypot(body.velocity.x, body.velocity.z)
-        if (speed > 1e-4) {
-          spin.crossVectors(UP, body.velocity).normalize()
-          mesh.rotateOnWorldAxis(spin, (speed / body.radius) * dt)
+        spin.crossVectors(body.up, body.velocity)
+        const along = spin.length()
+        if (along > 1e-4) {
+          mesh.rotateOnWorldAxis(spin.divideScalar(along), (along / body.radius) * dt)
         }
       }
       if (body.position.y < -40) {
         body.position.copy(item.home)
         body.velocity.set(0, 0, 0)
+        body.up.set(0, 1, 0)
         body.scale = 1
         body.resting = false
       }
@@ -295,9 +297,8 @@ export class ItemSystem {
     const { world, player } = this.engine
     const { body, mesh } = this.held!
     hold.copy(eye).addScaledVector(look, HOLD_AHEAD * player.scale)
-    hold.x += Math.cos(player.yaw) * HOLD_RIGHT * player.scale
-    hold.z -= Math.sin(player.yaw) * HOLD_RIGHT * player.scale
-    hold.y -= HOLD_BELOW * player.scale
+    hold.addScaledVector(player.right(sideways), HOLD_RIGHT * player.scale)
+    hold.addScaledVector(player.up, -HOLD_BELOW * player.scale)
 
     direction.subVectors(hold, eye)
     const length = direction.length()
@@ -325,6 +326,7 @@ export class ItemSystem {
     placedFrom(player.position, hold, hold)
     body.position.copy(hold)
     body.yaw = player.yaw
+    body.up.copy(player.up)
     mesh.position.copy(hold)
     mesh.scale.setScalar(body.scale)
     mesh.rotation.set(0, player.yaw, 0)
@@ -352,7 +354,7 @@ export class ItemSystem {
         distance === Infinity ? TARGET_OPEN : Math.max(TARGET_NEAR, Math.min(TARGET_FAR, distance))
       mark.copy(eye).addScaledVector(look, distance * player.scale)
       // Gravity on an item goes with its size; see Body.
-      throwVelocity(hand, mark, speed * player.scale, GRAVITY * body.scale, launch)
+      throwVelocity(hand, mark, speed * player.scale, GRAVITY * body.scale, launch, player.up)
       body.velocity.add(launch)
     }
     // The velocity was worked out where the player stands, not where the item is.

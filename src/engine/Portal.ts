@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { type Axis, frameFor } from './gravity'
 import { planetMotion } from './planet'
 import { portalTransform } from './portalMath'
 
@@ -14,8 +15,13 @@ export interface PortalOptions {
   name: string
   /* Bottom centre of the opening, world space. */
   position: THREE.Vector3
-  /* Rotation about the vertical axis; yaw 0 means the front faces world +Z. */
+  /*
+    Rotation about the door's own up; yaw 0 means the front faces +Z (for an
+    upright door: world +Z).
+  */
   yaw: number
+  /* Which way is up for the door. Defaults to 'y+', an ordinary upright door. */
+  up?: Axis
   /* Size of the opening before `scale` is applied. */
   width: number
   height: number
@@ -28,6 +34,8 @@ export interface PortalOptions {
 
 const corner = new THREE.Vector3()
 const scratch = new THREE.Matrix4()
+const turn = new THREE.Quaternion()
+const Y_AXIS = new THREE.Vector3(0, 1, 0)
 const local = new THREE.Vector3()
 
 export class Portal {
@@ -39,6 +47,8 @@ export class Portal {
   readonly mesh: THREE.Mesh
   /* World plane of the opening, normal pointing out of the front. */
   readonly plane = new THREE.Plane()
+  /* Which way is up for the door, in world coordinates. */
+  readonly up = new THREE.Vector3()
   readonly worldBounds = new THREE.Box3()
   readonly center = new THREE.Vector3()
   /*
@@ -77,7 +87,9 @@ export class Portal {
     geometry.translate(0, options.height / 2, -PORTAL_THICKNESS / 2)
     this.mesh = new THREE.Mesh(geometry)
     this.mesh.position.copy(options.position)
-    this.mesh.rotation.y = options.yaw
+    this.mesh.quaternion
+      .setFromRotationMatrix(frameFor(options.up ?? 'y+'))
+      .multiply(turn.setFromAxisAngle(Y_AXIS, options.yaw))
     this.mesh.scale.setScalar(this.scale)
     // On the planet the mesh is drawn away from its stored bounds, and the
     // portal renderer already decides which portals are in view.
@@ -85,6 +97,7 @@ export class Portal {
     this.mesh.updateMatrixWorld(true)
 
     this.worldInverse.copy(this.mesh.matrixWorld).invert()
+    this.up.set(0, 1, 0).transformDirection(this.mesh.matrixWorld)
     const normal = new THREE.Vector3(0, 0, 1).transformDirection(this.mesh.matrixWorld)
     this.plane.setFromNormalAndCoplanarPoint(normal, options.position)
     this.worldBounds.setFromObject(this.mesh)

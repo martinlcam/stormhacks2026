@@ -1,6 +1,7 @@
 import { Engine } from '../engine/Engine'
 import { World } from '../world/World'
 import { biggerInside } from '../world/structures/biggerInside'
+import { gravityRoom } from '../world/structures/gravityRoom'
 import { hub } from '../world/structures/hub'
 import { loopCorridor } from '../world/structures/loopCorridor'
 import { resizingDoors } from '../world/structures/resizingDoors'
@@ -21,6 +22,10 @@ export function bootstrap(canvas: HTMLCanvasElement): () => void {
     hub,
     biggerInside(() => game.discover('bigger-inside')),
     loopCorridor(() => game.discover('loop-corridor')),
+    gravityRoom(
+      () => game.discover('walls-are-floors'),
+      () => game.discover('on-the-ceiling'),
+    ),
     resizingDoors(
       () => game.discover('resizing-door'),
       () => game.discover('small-world'),

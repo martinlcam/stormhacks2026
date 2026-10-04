@@ -44,6 +44,20 @@ export const discoveries = {
     maths:
       'A doorway is a single rigid motion, and it is applied to where a thing is and to how it is moving alike. Seen from the door, nothing about the throw changed.',
   },
+  'walls-are-floors': {
+    id: 'walls-are-floors',
+    title: 'Down is where you are standing',
+    body: 'You walked through a door on the floor and came out standing on the wall.',
+    maths:
+      'The room did not move. The door applies a rotation as well as a shift, and it rotated you, your sense of down included. Every surface of a cube is a floor to someone turned the right way.',
+  },
+  'on-the-ceiling': {
+    id: 'on-the-ceiling',
+    title: 'Two quarter turns make a half turn',
+    body: 'A second door took you from the wall to the ceiling. The floor you started on is now overhead.',
+    maths:
+      'Rotations compose: a quarter turn followed by a quarter turn about the same axis is a half turn. The doors are the generators and the places you can stand are the results.',
+  },
 } satisfies Record<string, Discovery>
 
 export type DiscoveryId = keyof typeof discoveries

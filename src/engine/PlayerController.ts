@@ -1,7 +1,7 @@
 import * as THREE from 'three'
+import { type Axis, frameFor, inverseFrameFor, reorient, upVector } from './gravity'
 import { onPlanet, standOnPlanet, walkOnPlanet } from './planet'
 import type { Portal } from './Portal'
-import { yawDelta } from './portalMath'
 
 const RADIUS = 0.3
 const HEIGHT = 1.8
@@ -20,10 +20,18 @@ const wish = new THREE.Vector3()
 const before = new THREE.Vector3()
 const localBefore = new THREE.Vector3()
 const localAfter = new THREE.Vector3()
+const frameTurn = new THREE.Quaternion()
+const lookTurn = new THREE.Quaternion()
+const lookEuler = new THREE.Euler()
 
 /*
-  First-person walker: a vertical cylinder against axis-aligned boxes, with
-  step-up for stairs, and seamless travel through portals.
+  First-person walker: a cylinder against axis-aligned boxes, with step-up
+  for stairs, and seamless travel through portals.
+
+  The walker's up is one of the six world axes (see gravity.ts). Position
+  and velocity are kept in world coordinates; yaw and pitch are relative to
+  the frame for the current up. Walking, gravity and collision are worked
+  out inside that frame, where up is always +y.
 */
 export class PlayerController {
   /* Feet position. */
@@ -31,6 +39,8 @@ export class PlayerController {
   readonly velocity = new THREE.Vector3()
   yaw = 0
   pitch = 0
+  /* Which way is up. A portal that turns the player changes it. */
+  axis: Axis = 'y+'
   /*
     Size relative to normal. Every length the player owns (body, stride,
     jump, gravity, eye height) is multiplied by it, so being small feels
@@ -44,6 +54,8 @@ export class PlayerController {
   onLockChange?: (locked: boolean) => void
 
   private readonly keys = new Set<string>()
+  /* The world's boxes as seen from inside each frame other than y-up. */
+  private readonly framed = new Map<Axis, { source: readonly THREE.Box3[]; boxes: THREE.Box3[] }>()
   private readonly abort = new AbortController()
 
   constructor(private readonly dom: HTMLElement) {
@@ -79,6 +91,7 @@ export class PlayerController {
     this.velocity.set(0, 0, 0)
     this.yaw = this.spawnYaw
     this.pitch = 0
+    this.axis = 'y+'
     this.scale = 1
   }
 
@@ -91,12 +104,15 @@ export class PlayerController {
     if (wish.lengthSq() > 0) wish.normalize().multiplyScalar(speed)
     wish.applyAxisAngle(THREE.Object3D.DEFAULT_UP, this.yaw)
 
+    // Steer, fall and jump in the player's own frame, where up is +y.
+    this.velocity.applyMatrix4(inverseFrameFor(this.axis))
     // Ease towards the wished velocity: snappy on the ground, floaty in air.
     const blend = 1 - Math.exp(-(this.onGround ? 14 : 3) * dt)
     this.velocity.x += (wish.x - this.velocity.x) * blend
     this.velocity.z += (wish.z - this.velocity.z) * blend
     this.velocity.y -= GRAVITY * this.scale * dt
     if (this.onGround && this.keys.has('Space')) this.velocity.y = JUMP_SPEED * this.scale
+    this.velocity.applyMatrix4(frameFor(this.axis))
 
     const distance = this.velocity.length() * dt
     const steps = Math.max(1, Math.ceil(distance / (MAX_STEP * this.scale)))
@@ -106,19 +122,27 @@ export class PlayerController {
     if (this.position.y < -40) this.respawn()
   }
 
-  /* Where the eye is, in map coordinates. */
-  eye(target: THREE.Vector3) {
-    return target.copy(this.position).setY(this.position.y + EYE_HEIGHT * this.scale)
+  /* Which way is up for the player, in world coordinates. Do not modify. */
+  get up(): THREE.Vector3 {
+    return upVector(this.axis)
   }
 
-  /* The direction the player is looking, in map coordinates. */
+  /* Where the eye is, in world (on the planet: map) coordinates. */
+  eye(target: THREE.Vector3) {
+    return target.copy(this.position).addScaledVector(this.up, EYE_HEIGHT * this.scale)
+  }
+
+  /* The direction the player is looking, in world (on the planet: map) coordinates. */
   look(target: THREE.Vector3) {
     const level = Math.cos(this.pitch)
-    return target.set(
-      -Math.sin(this.yaw) * level,
-      Math.sin(this.pitch),
-      -Math.cos(this.yaw) * level,
-    )
+    return target
+      .set(-Math.sin(this.yaw) * level, Math.sin(this.pitch), -Math.cos(this.yaw) * level)
+      .applyMatrix4(frameFor(this.axis))
+  }
+
+  /* The direction to the player's right, level with the ground they stand on. */
+  right(target: THREE.Vector3) {
+    return target.set(Math.cos(this.yaw), 0, -Math.sin(this.yaw)).applyMatrix4(frameFor(this.axis))
   }
 
   applyTo(camera: THREE.PerspectiveCamera) {
@@ -126,8 +150,10 @@ export class PlayerController {
     if (onPlanet(this.position)) {
       standOnPlanet(camera, this.position, eye, this.yaw, this.pitch)
     } else {
-      camera.position.set(this.position.x, this.position.y + eye, this.position.z)
-      camera.rotation.set(this.pitch, this.yaw, 0, 'YXZ')
+      camera.position.copy(this.position).addScaledVector(this.up, eye)
+      frameTurn.setFromRotationMatrix(frameFor(this.axis))
+      lookTurn.setFromEuler(lookEuler.set(this.pitch, this.yaw, 0, 'YXZ'))
+      camera.quaternion.copy(frameTurn).multiply(lookTurn)
     }
     // Scaling the camera measures the view in the player's own units, so the
     // near plane and fog shrink with them, and the view through a resizing
@@ -152,23 +178,56 @@ export class PlayerController {
       this.position.addScaledVector(this.velocity, dt)
     }
 
-    const doorway = portals.find((portal) => this.fits(portal) && portal.inDoorway(before))
-    this.collide(colliders, doorway)
+    const doorway = portals.find((portal) => this.canEnter(portal) && portal.inDoorway(before))
+    this.collideInFrame(colliders, doorway)
     // Passing the point opposite the pole moves the walker to the far side
     // of the map in one step. That is not a path a portal could be on.
     const jumped = before.distanceTo(this.position) > this.velocity.length() * dt * 4 + 1
     if (!jumped) this.traverse(portals)
   }
 
-  private collide(colliders: readonly THREE.Box3[], doorway: Portal | undefined) {
+  /* Collide in the player's own frame, where the boxes are still axis-aligned. */
+  private collideInFrame(colliders: readonly THREE.Box3[], doorway: Portal | undefined) {
+    if (this.axis === 'y+') {
+      this.collide(colliders, colliders, doorway)
+      return
+    }
+    let framed = this.framed.get(this.axis)
+    if (!framed || framed.source !== colliders || framed.boxes.length !== colliders.length) {
+      const inverse = inverseFrameFor(this.axis)
+      framed = {
+        source: colliders,
+        boxes: colliders.map((box) => box.clone().applyMatrix4(inverse)),
+      }
+      this.framed.set(this.axis, framed)
+    }
+    this.position.applyMatrix4(inverseFrameFor(this.axis))
+    this.velocity.applyMatrix4(inverseFrameFor(this.axis))
+    this.collide(framed.boxes, colliders, doorway)
+    this.position.applyMatrix4(frameFor(this.axis))
+    this.velocity.applyMatrix4(frameFor(this.axis))
+  }
+
+  /*
+    `boxes` are the colliders in the player's frame, and `position` and
+    `velocity` must be in that frame too. `originals` are the same boxes in
+    world coordinates, in the same order, which is how a doorway names the
+    wall behind it.
+  */
+  private collide(
+    boxes: readonly THREE.Box3[],
+    originals: readonly THREE.Box3[],
+    doorway: Portal | undefined,
+  ) {
     const p = this.position
     const radius = RADIUS * this.scale
     const height = HEIGHT * this.scale
     const stepHeight = STEP_HEIGHT * this.scale
     let ground = -Infinity
 
-    for (const box of colliders) {
-      if (doorway?.ghostColliders.has(box)) continue
+    for (let i = 0; i < boxes.length; i++) {
+      const box = boxes[i]
+      if (doorway?.ghostColliders.has(originals[i])) continue
 
       // Closest point of the box's footprint to the player's axis.
       const cx = Math.max(box.min.x, Math.min(p.x, box.max.x))
@@ -213,8 +272,12 @@ export class PlayerController {
     }
   }
 
-  private fits(portal: Portal) {
-    return portal.fits(RADIUS * 2 * this.scale, HEIGHT * this.scale)
+  /*
+    A door can be walked through only by someone who fits and who stands the
+    same way up as it does. A door lying on its side on your wall is a wall.
+  */
+  private canEnter(portal: Portal) {
+    return portal.fits(RADIUS * 2 * this.scale, HEIGHT * this.scale) && portal.up.dot(this.up) > 0.9
   }
 
   /* Carry the player through any portal their path crossed this step. */
@@ -227,7 +290,7 @@ export class PlayerController {
       // Where the path met the plane must be inside the opening.
       const t = localBefore.z / (localBefore.z - localAfter.z)
       localBefore.lerp(localAfter, t)
-      if (!portal.withinOpening(localBefore) || !this.fits(portal)) continue
+      if (!portal.withinOpening(localBefore) || !this.canEnter(portal)) continue
 
       this.position.applyMatrix4(portal.transform)
       // A resizing portal changes the player and their speed by the same ratio.
@@ -235,7 +298,10 @@ export class PlayerController {
       const speed = this.velocity.length() * ratio
       this.scale *= ratio
       this.velocity.transformDirection(portal.transform).multiplyScalar(speed)
-      this.yaw += yawDelta(portal.transform)
+      // The door may turn the player onto a wall or the ceiling.
+      const turned = reorient(this.axis, this.yaw, portal.transform)
+      this.axis = turned.axis
+      this.yaw = turned.yaw
       portal.onTraverse?.()
       return
     }
