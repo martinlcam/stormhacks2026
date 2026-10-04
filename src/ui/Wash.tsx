@@ -27,10 +27,11 @@ const BLOOM_REACH = 70
 /*
   A sheet of the landing page's watercolour paper, to put behind text: an
   off-white wash with an uneven edge, darker where the pigment collected as
-  it dried, a fine grain, and up to two paler blooms of colour. It fills the
-  nearest positioned parent, so the parent should be `relative` and have
-  room round its text for the edge. It is all SVG filters, so it needs no
-  images and stays sharp at any size.
+  it dried, and up to two paler blooms of colour. It has no grain of its
+  own: the grain is the world's, under it, and the sheet lies clean over it.
+  It fills the nearest positioned parent, so the parent should be `relative`
+  and have room round its text for the edge. It is all SVG filters, so it
+  needs no images and stays sharp at any size.
 */
 export function Wash({
   rough = 26,
@@ -145,7 +146,7 @@ export function Wash({
   )
 }
 
-/* The filter that makes a shape a wash: a wandering edge, a dried rim and a grain. */
+/* The filter that makes a shape a wash: a wandering edge and a dried rim. */
 function WashFilter({
   id,
   seed,
@@ -186,18 +187,9 @@ function WashFilter({
         values={`0.62 0 0 0 0  0 0.6 0 0 0  0 0 0.56 0 0  0 0 0 ${rim} 0`}
         result="darkRim"
       />
-      {/* Grain: faint dark specks, only where the wash is. */}
-      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed={seed + 7} />
-      <feColorMatrix
-        type="matrix"
-        values="0 0 0 0 0.3  0 0 0 0 0.27  0 0 0 0 0.24  0.6 0 0 0 -0.22"
-        result="specks"
-      />
-      <feComposite in="specks" in2="soft" operator="in" result="grain" />
       <feMerge>
         <feMergeNode in="soft" />
         <feMergeNode in="darkRim" />
-        <feMergeNode in="grain" />
       </feMerge>
     </filter>
   )

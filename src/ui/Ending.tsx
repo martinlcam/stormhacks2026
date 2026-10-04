@@ -40,6 +40,10 @@ const LINE_SECONDS = GIRL_SECONDS * GIRL.length
 
 const NAMES = ['martin cam', 'owen skippen', 'alexander ng', 'johnny ho']
 
+/* The frame is as large as fits in the window, and centred, as on the landing page. */
+const FRAME_BOX =
+  'absolute top-1/2 left-1/2 aspect-[3/2] w-[min(100%,150dvh)] -translate-x-1/2 -translate-y-1/2'
+
 /* The right edge of the heading and the credits, and the middles of the caption and the score. */
 const RIGHT = 1915
 const CAPTION_X = 1079.5
@@ -117,9 +121,8 @@ export function Ending({ phase, onContinue }: { phase: EndingPhase; onContinue: 
       className={`absolute inset-0 bg-white transition-opacity ease-in ${white ? 'opacity-100' : 'opacity-0'}`}
       style={{ transitionDuration: `${phase === 'dismissed' ? 1 : FADE_SECONDS}s` }}
     >
-      {/* The frame is as large as fits in the window, and centred, as on the landing page. */}
       <div
-        className={`@container absolute top-1/2 left-1/2 aspect-[3/2] w-[min(100%,150dvh)] -translate-x-1/2 -translate-y-1/2 font-light text-caption transition-opacity duration-1000 ${shown ? 'pointer-events-auto opacity-100' : 'opacity-0'}`}
+        className={`@container ${FRAME_BOX} font-light text-caption transition-opacity duration-1000 ${shown ? 'pointer-events-auto opacity-100' : 'opacity-0'}`}
       >
         {GIRL.map((src, i) => (
           <img
@@ -186,9 +189,20 @@ export function Ending({ phase, onContinue }: { phase: EndingPhase; onContinue: 
             {caption}
           </Type>
         ))}
+      </div>
 
+      {/* The grain, over everything, as it is in the Figma file. */}
+      <div
+        className="pointer-events-none absolute inset-0 bg-cover bg-center"
+        style={{ backgroundImage: `url(${GRAIN})`, opacity: PAGE_GRAIN }}
+      />
+
+      {/* The buttons, in the frame but over the grain, as every sheet of watercolour paper is. */}
+      <div
+        className={`pointer-events-none ${FRAME_BOX} transition-opacity duration-1000 ${shown ? 'opacity-100' : 'opacity-0'}`}
+      >
         <div
-          className="absolute left-1/2 flex -translate-x-1/2 gap-3"
+          className={`absolute left-1/2 flex -translate-x-1/2 gap-3 ${shown ? 'pointer-events-auto' : ''}`}
           style={{ top: percent(1240, FRAME.h) }}
         >
           <PaperButton onClick={onContinue} focusable={shown} seed={31}>
@@ -199,12 +213,6 @@ export function Ending({ phase, onContinue }: { phase: EndingPhase; onContinue: 
           </PaperButton>
         </div>
       </div>
-
-      {/* The grain, over everything, as it is in the Figma file. */}
-      <div
-        className="pointer-events-none absolute inset-0 bg-cover bg-center"
-        style={{ backgroundImage: `url(${GRAIN})`, opacity: PAGE_GRAIN }}
-      />
     </div>
   )
 }

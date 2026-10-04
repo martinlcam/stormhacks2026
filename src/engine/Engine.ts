@@ -115,6 +115,7 @@ export class Engine {
     if (clientWidth === 0 || clientHeight === 0) return
     this.renderer.setSize(clientWidth, clientHeight, false)
     filmUniforms.uFilmSpeck.value = this.renderer.getPixelRatio()
+    this.renderer.getDrawingBufferSize(filmUniforms.uFilmScreen.value)
     this.camera.aspect = clientWidth / clientHeight
     this.camera.updateProjectionMatrix()
   }
