@@ -79,6 +79,9 @@ export class Portal {
     this.mesh.position.copy(options.position)
     this.mesh.rotation.y = options.yaw
     this.mesh.scale.setScalar(this.scale)
+    // On the planet the mesh is drawn away from its stored bounds, and the
+    // portal renderer already decides which portals are in view.
+    this.mesh.frustumCulled = false
     this.mesh.updateMatrixWorld(true)
 
     this.worldInverse.copy(this.mesh.matrixWorld).invert()
