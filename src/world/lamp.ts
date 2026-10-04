@@ -67,12 +67,7 @@ export function addLamp(
   }
 }
 
-/* A reachable fixture beside the starting path, clear of the player's body. */
+/* Starts in the player's hand; its home is a reachable fallback if it is lost. */
 export function addWorldLamp(world: World) {
-  world.addBox({
-    size: [0.7, 0.7, 0.7],
-    position: [0.9, 0.35, 0.4],
-    material: new THREE.MeshStandardMaterial({ color: 0x544459, roughness: 0.9 }),
-  })
-  return addLamp(world, [0.9, 0.95, 0.4])
+  return addLamp(world, [0.9, 0.25, 0.4])
 }

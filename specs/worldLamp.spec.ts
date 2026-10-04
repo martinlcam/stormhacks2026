@@ -10,10 +10,12 @@ import {
 } from '../src/engine/planet'
 import { Portal } from '../src/engine/Portal'
 import { PortalLighting } from '../src/engine/PortalLighting'
+import { PlayerController } from '../src/engine/PlayerController'
+import { ItemSystem } from '../src/game/items'
 import { addLamp, addWorldLamp } from '../src/world/lamp'
 import { rockyGround } from '../src/world/materials'
 import { World } from '../src/world/World'
-import { expectAt, linked } from './support'
+import { expectAt, linked, quietBrowser } from './support'
 
 afterEach(() => configurePlanet(null))
 
@@ -47,17 +49,49 @@ function shaderFor(material: THREE.Material) {
 }
 
 describe('The full-world lamp', () => {
-  it('starts within reach beside the starting path and remains active without lab settings', () => {
+  it('starts held and lit, follows the player, and can be put down normally', () => {
     const world = new World()
     const emitter = addWorldLamp(world)
+    const player = new PlayerController(quietBrowser())
+    player.spawn.set(0, 0, 2)
+    player.respawn()
+    const items = new ItemSystem(
+      { world, player },
+      {
+        prompt() {},
+        charge() {},
+        thrownThrough() {},
+      },
+      emitter.lamp,
+    )
+    items.update(0)
     emitter.update()
     const eye = new THREE.Vector3(0, 1.62, 2)
-    expect(emitter.lamp.home.distanceTo(eye)).toBeLessThan(3)
+    expect(emitter.light.position.distanceTo(eye)).toBeLessThan(1.5)
+    expect(emitter.lamp.body.resting).toBe(true)
+    expect(emitter.lamp.body.position.y).toBeGreaterThan(1)
     expect(world.colliders.some((box) => box.containsPoint(eye))).toBe(false)
     expect(world.items).toContain(emitter.lamp)
     expect(world.scene.children).toContain(emitter.light)
     expect(emitter.light.intensity).toBe(40)
 
+    const before = emitter.light.position.clone()
+    player.position.x += 2
+    items.update(0.1)
+    emitter.update()
+    expect(emitter.light.position.x - before.x).toBeCloseTo(2)
+
+    items.use()
+    const dropped = emitter.lamp.body.position.clone()
+    expect(emitter.lamp.body.resting).toBe(false)
+    player.position.x += 2
+    items.update(0.1)
+    emitter.update()
+    expect(emitter.light.position.x).toBeCloseTo(dropped.x)
+    expect(emitter.light.intensity).toBe(40)
+
+    items.dispose()
+    player.dispose()
     emitter.dispose()
     expect(world.scene.children).not.toContain(emitter.light)
     expect(world.scene.children).not.toContain(emitter.lights[1])
