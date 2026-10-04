@@ -48,7 +48,7 @@ export function bootstrap(canvas: HTMLCanvasElement): () => void {
   const avatar = new Avatar(world.scene, engine.player)
   world.onUpdate((dt) => {
     items.update(dt)
-    avatar.update(dt, items.holding)
+    avatar.update(dt)
   })
   engine.start()
 

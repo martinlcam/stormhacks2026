@@ -3,32 +3,29 @@ import { frameFor } from '../engine/gravity'
 import type { PlayerController } from '../engine/PlayerController'
 import { PORTAL_ONLY_LAYER } from '../engine/PortalRenderer'
 import { palette } from '../world/materials'
-import type { Item } from '../world/World'
 
-/* All lengths are for a player of scale 1, feet at the origin, facing -Z. */
-const HEM = 0.34
-const SHOULDER = 1.3
-const HEAD = 1.43
-const HAT_BRIM = 1.5
-const HAT_HEIGHT = 0.4
-const ARM_REST = 0.4
-/* The furthest the arm stretches towards something held. */
-const ARM_REACH = 0.75
-/* Radians of walk cycle per metre walked. */
-const STRIDE = 2.2
-const LEG_SWING = 0.5
-/* The speed at which the legs reach their full swing. */
-const FULL_SWING_SPEED = 4.5
+/*
+  All lengths are for a player of scale 1, feet at the origin. They follow
+  the player's collision shape: 0.3 m in radius at the ground, 1.8 m tall,
+  with the eye at the middle of the head.
+*/
+const BASE_RADIUS = 0.3
+const RIM_RADIUS = 0.14
+const RIM_HEIGHT = 1.48
+const HEAD_RADIUS = 0.17
+/* The slot is a bowl cut from a slightly larger ball, so the head sits in it with a gap. */
+const SLOT_RADIUS = 0.185
+/* How many flat faces go round the body, and how many steps the bowl is cut in. */
+const SIDES = 20
+const SLOT_STEPS = 5
 
-const DOWN = new THREE.Vector3(0, -1, 0)
-const target = new THREE.Vector3()
-const aim = new THREE.Quaternion()
 const turn = new THREE.Quaternion()
+const roll = new THREE.Vector3()
 const UP = new THREE.Vector3(0, 1, 0)
 
 /*
   Paper-like: one flat tone per face, no gloss. It gives off a little of its
-  own colour so the figure stays white in the plaza's dim violet light.
+  own colour so the figure stays light in the plaza's dim violet light.
 */
 function paper(color: number): THREE.MeshStandardMaterial {
   return new THREE.MeshStandardMaterial({
@@ -40,74 +37,62 @@ function paper(color: number): THREE.MeshStandardMaterial {
   })
 }
 
+/* How far the centre of the slot's ball is above the rim. */
+const SLOT_RISE = Math.sqrt(SLOT_RADIUS ** 2 - RIM_RADIUS ** 2)
+
 /*
-  The player's own body: a small faceless figure in white, a cone of a dress
-  under a tall pointed hat, on thin legs.
+  The body's outline from the axis outwards, to be spun round the axis:
+  across the flat bottom, up the tapering side to the rim, then down into
+  the bowl of the slot and back to the axis.
+*/
+function outline(): THREE.Vector2[] {
+  const points = [
+    new THREE.Vector2(0, 0),
+    new THREE.Vector2(BASE_RADIUS, 0),
+    new THREE.Vector2(RIM_RADIUS, RIM_HEIGHT),
+  ]
+  for (let i = 1; i <= SLOT_STEPS; i++) {
+    const r = RIM_RADIUS * (1 - i / SLOT_STEPS)
+    points.push(new THREE.Vector2(r, RIM_HEIGHT + SLOT_RISE - Math.sqrt(SLOT_RADIUS ** 2 - r ** 2)))
+  }
+  return points
+}
+
+/*
+  The player's own body: a tapering cylinder, flat on the bottom and narrower
+  towards the top, with a bowl-shaped slot in the top and a ball resting in
+  the slot for a head. There are no arms or legs.
 
   The game stays first person. The body is drawn where the player stands, so
-  they see the dress and their feet when they look down, an arm when they
-  carry something, and the whole figure when a doorway shows them themselves.
-  The head and hat would be in the eye's way, so those are only drawn in views
-  through portals.
+  they see the rim and the slot when they look down, and the whole figure
+  when a doorway shows them themselves. The eye is inside the head, so the
+  head is only drawn in views through portals.
 */
 export class Avatar {
+  readonly body: THREE.Mesh
+  readonly head: THREE.Mesh
   private readonly group = new THREE.Group()
-  private readonly arms: THREE.Mesh[] = []
-  private readonly armRest: THREE.Quaternion[] = []
-  private readonly legs: THREE.Mesh[] = []
-  private phase = 0
-  private swing = 0
 
   constructor(
     scene: THREE.Scene,
     private readonly player: PlayerController,
   ) {
-    const cloth = paper(0xffffff)
-    const skin = paper(palette.bone)
+    this.body = new THREE.Mesh(new THREE.LatheGeometry(outline(), SIDES), paper(0xffffff))
+    this.head = new THREE.Mesh(new THREE.IcosahedronGeometry(HEAD_RADIUS, 1), paper(palette.bone))
+    this.head.position.y = RIM_HEIGHT + SLOT_RISE
+    this.head.layers.set(PORTAL_ONLY_LAYER)
 
-    const dress = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.29, SHOULDER - HEM, 10), cloth)
-    dress.position.y = (SHOULDER + HEM) / 2
-    this.group.add(dress)
-
-    const head = new THREE.Mesh(new THREE.IcosahedronGeometry(0.15, 1), skin)
-    head.position.y = HEAD
-    const hat = new THREE.Mesh(new THREE.ConeGeometry(0.17, HAT_HEIGHT, 10), cloth)
-    hat.position.y = HAT_BRIM + HAT_HEIGHT / 2
-    for (const mesh of [head, hat]) {
-      mesh.layers.set(PORTAL_ONLY_LAYER)
+    for (const mesh of [this.body, this.head]) {
+      // The stored bounds are not where a mesh on the planet is drawn.
+      mesh.frustumCulled = false
       this.group.add(mesh)
     }
-
-    // Limbs hang down from their pivot, one unit long, and are scaled to length.
-    const limb = new THREE.CylinderGeometry(0.024, 0.018, 1, 6).translate(0, -0.5, 0)
-    for (const side of [-1, 1]) {
-      const arm = new THREE.Mesh(limb, skin)
-      arm.position.set(side * 0.1, SHOULDER - 0.06, 0)
-      const rest = new THREE.Quaternion().setFromUnitVectors(
-        DOWN,
-        new THREE.Vector3(side * 0.3, -1, 0).normalize(),
-      )
-      arm.quaternion.copy(rest)
-      arm.scale.y = ARM_REST
-      this.arms.push(arm)
-      this.armRest.push(rest)
-      this.group.add(arm)
-
-      const leg = new THREE.Mesh(limb, skin)
-      leg.position.set(side * 0.07, HEM + 0.06, 0)
-      leg.scale.y = HEM + 0.06
-      this.legs.push(leg)
-      this.group.add(leg)
-    }
-
-    // The stored bounds are not where a bent mesh is drawn.
-    for (const mesh of this.group.children) mesh.frustumCulled = false
     scene.add(this.group)
   }
 
-  /* Follow the player. `holding` is what they are carrying, if anything. */
-  update(dt: number, holding: Item | null) {
-    const { player, group } = this
+  /* Follow the player. */
+  update(dt: number) {
+    const { player, group, head } = this
     group.position.copy(player.position)
     // Stand on whatever surface the player stands on, turned to face their way.
     group.quaternion
@@ -116,32 +101,14 @@ export class Avatar {
     group.scale.setScalar(player.scale)
     group.updateMatrixWorld(true)
 
-    // Legs: small quick steps, in time with the ground covered.
+    // The head is loose in its slot, so it rolls like a ball as the body moves.
     const rising = player.velocity.dot(player.up)
-    const along = Math.sqrt(Math.max(0, player.velocity.lengthSq() - rising * rising))
-    const speed = along / player.scale
-    const wanted = player.onGround ? Math.min(1, speed / FULL_SWING_SPEED) : 0
-    this.swing += (wanted - this.swing) * (1 - Math.exp(-10 * dt))
-    this.phase += speed * STRIDE * dt
-    const angle = Math.sin(this.phase) * LEG_SWING * this.swing
-    this.legs[0].rotation.x = angle
-    this.legs[1].rotation.x = -angle
-
-    // Right arm: out to whatever is held, otherwise back at the side.
-    const arm = this.arms[1]
-    let length = ARM_REST
-    aim.copy(this.armRest[1])
-    if (holding) {
-      group.worldToLocal(target.copy(holding.body.position)).sub(arm.position)
-      const distance = target.length()
-      if (distance > 1e-6) {
-        aim.setFromUnitVectors(DOWN, target.divideScalar(distance))
-        const radius = holding.body.radius / player.scale
-        length = Math.max(0.1, Math.min(ARM_REACH, distance - radius))
-      }
+    roll.copy(player.velocity).addScaledVector(player.up, -rising)
+    const speed = roll.length()
+    if (speed > 1e-4) {
+      roll.crossVectors(player.up, roll).normalize()
+      group.worldToLocal(roll.add(group.position)).normalize()
+      head.rotateOnWorldAxis(roll, (speed * dt) / (HEAD_RADIUS * player.scale))
     }
-    const ease = 1 - Math.exp(-14 * dt)
-    arm.quaternion.slerp(aim, ease)
-    arm.scale.y += (length - arm.scale.y) * ease
   }
 }
