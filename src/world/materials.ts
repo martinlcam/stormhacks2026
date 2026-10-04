@@ -29,6 +29,35 @@ export function gridTexture(background: string, line: string, repeat: number): T
   return texture
 }
 
+/*
+  A tiling image from public/textures. `metres` is how much ground one copy
+  of the image covers, on a surface whose UVs count one unit per two metres,
+  as the ground's do.
+*/
+function groundTexture(file: string, metres: number, colour: boolean): THREE.Texture {
+  const texture = new THREE.TextureLoader().load(`${import.meta.env.BASE_URL}textures/${file}`)
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping
+  texture.repeat.setScalar(2 / metres)
+  texture.anisotropy = 8
+  if (colour) texture.colorSpace = THREE.SRGBColorSpace
+  return texture
+}
+
+/*
+  Rocky ground: "Rocky Terrain 02" by Amal Kumar, from Poly Haven
+  (polyhaven.com/a/rocky_terrain_02), released under CC0. The image is an
+  aerial view 90 m across. It is laid much smaller than that here, so that
+  there is detail underfoot on a planet only 240 m round.
+*/
+export function rockyGround(): THREE.MeshStandardMaterial {
+  const metres = 24
+  return new THREE.MeshStandardMaterial({
+    map: groundTexture('rocky_terrain_02/diffuse.jpg', metres, true),
+    normalMap: groundTexture('rocky_terrain_02/normal.jpg', metres, false),
+    roughness: 0.95,
+  })
+}
+
 export function matte(color: number): THREE.MeshStandardMaterial {
   return new THREE.MeshStandardMaterial({ color, roughness: 0.85 })
 }

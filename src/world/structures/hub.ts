@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import type { Structure } from '../World'
-import { createSky, glow, gridTexture, matte, palette } from '../materials'
+import { createSky, glow, matte, palette, rockyGround } from '../materials'
 
 /*
   Distance around the planet. Its radius is this / 2π, about 38 m, and the
@@ -59,13 +59,7 @@ export const hub: Structure = {
     world.planetSize = CIRCUMFERENCE
 
     const reach = CIRCUMFERENCE / 2
-    const ground = new THREE.Mesh(
-      groundDisk(reach, 120, 128),
-      new THREE.MeshStandardMaterial({
-        map: gridTexture('#1a1a1a', '#3d2a52', 1),
-        roughness: 0.9,
-      }),
-    )
+    const ground = new THREE.Mesh(groundDisk(reach, 120, 128), rockyGround())
     ground.frustumCulled = false
     world.scene.add(ground)
     // On the map the ground is a flat slab under the whole disk.
