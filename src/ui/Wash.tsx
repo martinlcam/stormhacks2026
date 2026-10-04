@@ -1,15 +1,28 @@
-import { useId } from 'react'
+import { useId, useLayoutEffect, useRef, useState } from 'react'
 
 /* The colours a bloom can be: the title's green, the water's blue and the light's yellow. */
 const BLOOMS = { green: '#cdf075', blue: '#8fbde6', yellow: '#f5d84a' } as const
 
 export type Bloom = keyof typeof BLOOMS
 
-/* Where the first and second bloom sit in the sheet, as fractions of its size. */
+/*
+  How far the sheet's edge sits inside the panel, as a fraction of its width
+  and of its height, and never more than INSET_MOST pixels, so that the
+  paper of a tall panel still reaches past the padding round its text.
+*/
+const INSET = { x: 0.04, y: 0.05 }
+const INSET_MOST = 14
+
+/*
+  Where the first and second bloom sit in the sheet: the middle, as
+  fractions of its size and at most BLOOM_REACH pixels in from its nearer
+  corner, and the size, as fractions. A bloom is never taller than it is wide.
+*/
 const PLACES = [
-  { cx: '18%', cy: '16%', rx: '20%', ry: '13%' },
-  { cx: '80%', cy: '80%', rx: '20%', ry: '14%' },
+  { x: 0.18, y: 0.16, rx: 0.2, ry: 0.13 },
+  { x: 0.84, y: 0.85, rx: 0.2, ry: 0.13 },
 ] as const
+const BLOOM_REACH = 70
 
 /*
   A sheet of the landing page's watercolour paper, to put behind text: an
@@ -35,22 +48,58 @@ export function Wash({
   radius?: number
 }) {
   const id = useId().replace(/[^a-zA-Z0-9]/g, '')
+  const svg = useRef<SVGSVGElement>(null)
+  const [size, setSize] = useState<{ width: number; height: number } | null>(null)
+
+  // Measured, so that the edge and the blooms can be placed in pixels. Until then, fractions do.
+  useLayoutEffect(() => {
+    const observer = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect
+      setSize((was) => (was?.width === width && was.height === height ? was : { width, height }))
+    })
+    observer.observe(svg.current!)
+    return () => observer.disconnect()
+  }, [])
+
+  const inset = (fraction: number, length: number) => Math.min(fraction * length, INSET_MOST)
+  const box = size
+    ? {
+        x: inset(INSET.x, size.width),
+        y: inset(INSET.y, size.height),
+        width: size.width - 2 * inset(INSET.x, size.width),
+        height: size.height - 2 * inset(INSET.y, size.height),
+      }
+    : { x: '4%', y: '5%', width: '92%', height: '90%' }
+
+  const place = (i: number) => {
+    const { x, y, rx, ry } = PLACES[i]
+    if (!size) {
+      return { cx: `${x * 100}%`, cy: `${y * 100}%`, rx: `${rx * 100}%`, ry: `${ry * 100}%` }
+    }
+
+    const { width, height } = size
+    const across = rx * width
+    // In from the nearer edge, each way.
+    const along = (fraction: number, length: number) =>
+      fraction < 0.5
+        ? Math.min(fraction * length, BLOOM_REACH)
+        : length - Math.min((1 - fraction) * length, BLOOM_REACH)
+    return {
+      cx: along(x, width),
+      cy: along(y, height),
+      rx: across,
+      ry: Math.min(ry * height, across),
+    }
+  }
+
   const sheet = (fill: string, opacity: number) => (
-    <rect
-      x="4%"
-      y="5%"
-      width="92%"
-      height="90%"
-      rx={radius}
-      fill={fill}
-      fillOpacity={opacity}
-      filter={`url(#${id}paper)`}
-    />
+    <rect {...box} rx={radius} fill={fill} fillOpacity={opacity} filter={`url(#${id}paper)`} />
   )
 
   return (
     // On a layer of its own, so that the text over it changing does not run the filters again.
     <svg
+      ref={svg}
       className="pointer-events-none absolute inset-0 h-full w-full overflow-visible"
       style={{ willChange: 'transform' }}
       aria-hidden
@@ -85,7 +134,7 @@ export function Wash({
           {blooms.slice(0, PLACES.length).map((bloom, i) => (
             <ellipse
               key={bloom}
-              {...PLACES[i]}
+              {...place(i)}
               fill={`url(#${id}${bloom})`}
               filter={`url(#${id}bloom)`}
             />
