@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import type { Structure } from '../World'
-import { glow, palette } from '../materials'
+import { glow, matte, palette } from '../materials'
 
 /* Where the sculpture stands in the plaza, and how high its middle is. */
 const X = 5
@@ -11,6 +11,11 @@ const MIDDLE = 2.5
 const SIZE = 0.42
 /* How far the eye of the projection is from the middle, along the fourth axis. */
 const EYE = 3
+/* Where the wheel that turns it stands. */
+const WHEEL_X = X + 1.7
+/* Radians a second it turns the fourth way: left to itself, and with the wheel held. */
+const DRIFT = 0.45
+const TURNED = 1.3
 
 /* The 16 corners of a hypercube: every choice of -1 or 1 on four axes. */
 const corners = Array.from({ length: 16 }, (_, i) => [
@@ -39,8 +44,14 @@ const along = new THREE.Vector3()
   small. The hypercube turns in planes that include the fourth axis, which
   carries the near cube out through the far one. Nothing in it bends or
   stretches; only the shadow does.
+
+  It always spins in the ordinary way, about an axle. The other turn, the
+  one through the fourth axis, it makes by itself only until the player
+  takes the wheel beside it. After that it is theirs: it turns that way
+  while the wheel is held and runs down when it is let go, so the two kinds
+  of turn can be told apart.
 */
-export function sculpture(onFind: () => void): Structure {
+export function sculpture(onFind: () => void, onTurn: () => void): Structure {
   return {
     name: 'sculpture',
     build(world) {
@@ -67,10 +78,42 @@ export function sculpture(onFind: () => void): Structure {
       }
       world.scene.add(group)
 
+      // The wheel: a post with a ring on it that goes round as the hypercube turns.
+      world.addBox({
+        size: [0.22, 1, 0.22],
+        position: [WHEEL_X, 0.5, Z],
+        material: matte(palette.stone),
+      })
+      const wheel = new THREE.Mesh(new THREE.TorusGeometry(0.26, 0.035, 8, 24), joint)
+      const spoke = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.04, 0.04), joint)
+      wheel.add(spoke)
+      wheel.position.set(WHEEL_X, 1.2, Z)
+      world.add(wheel)
+
+      // How far it has turned the fourth way, how fast, and whether the wheel is held this frame.
+      let a = 0
+      let speed = DRIFT
+      let taken = false
+      let held = false
+      world.addHandle(
+        [WHEEL_X - 1.1, -1, Z - 1.3],
+        [WHEEL_X + 1.3, 4, Z + 1.3],
+        'turn it the fourth way',
+        () => {
+          held = true
+          if (taken) return
+          taken = true
+          onTurn()
+        },
+      )
+
       const shadow = corners.map(() => new THREE.Vector3())
       const nearness = corners.map(() => 1)
-      world.onUpdate((_dt, time) => {
-        const a = time * 0.45
+      world.onUpdate((dt, time) => {
+        if (taken) speed += ((held ? TURNED : 0) - speed) * Math.min(1, dt * 3)
+        held = false
+        a += speed * dt
+        wheel.rotation.z = -a * 2
         const b = time * 0.3
         corners.forEach(([x, y, z, w], i) => {
           // Turn in the x-w plane, then in the y-z plane.

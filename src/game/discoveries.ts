@@ -121,6 +121,41 @@ export const discoveries = {
     maths:
       'The tall door divides by four each time, so after n times through a thing is (1/4)ⁿ of its size: 1, 1/4, 1/16. The door does not care who is carrying what, which is why a thrown gem shrinks alone.',
   },
+  'three-right-angles': {
+    id: 'three-right-angles',
+    title: 'A triangle with three right angles',
+    body: 'You walked three straight lines and turned a right angle at each corner, and the third line brought you back to where you began.',
+    maths:
+      'On flat ground the angles of a triangle add up to 180°. On a sphere they add up to more, and the extra is the share of the sphere that the triangle covers: this one covers an eighth of the planet and has 90° too many. A small triangle here is very nearly flat, which is why nobody notices.',
+  },
+  'parallels-meet': {
+    id: 'parallels-meet',
+    title: 'Parallel lines that meet',
+    body: 'The two rails set off side by side, two metres apart and pointing the same way. Neither of them turns, and here they cross.',
+    maths:
+      'A straight line on a sphere is a great circle, and any two great circles cross, twice, on opposite sides of the world. Euclid had to assume that parallel lines never meet. It is true on flat ground and nowhere else: on this planet there are no parallel lines at all.',
+  },
+  'endless-table': {
+    id: 'endless-table',
+    title: 'An endless floor on a table top',
+    body: 'Every tile on the table is the same size. The ones by the rim only look small, and as you walk round the table the ones nearest you grow to show it.',
+    maths:
+      'This is the hyperbolic plane as Poincaré drew it: all of it fits inside the circle, because the picture shrinks things as they near the rim. Five-sided tiles with square corners, four to a corner, cannot be laid on a flat floor. Here there is room, and more room the further out you go: the beads cross at a steady pace and never arrive.',
+  },
+  'fourth-turn': {
+    id: 'fourth-turn',
+    title: 'A turn you cannot point to',
+    body: 'You held the wheel and the cube turned itself inside out. When you let go, it only spun.',
+    maths:
+      'A turn happens in a plane: two directions change places and every other one stays as it was. In three dimensions that leaves one direction over, the axle. In four it leaves two, and one of the planes there is to turn in includes the direction you cannot see. The wheel turns the hypercube in that plane, and what looks like swelling and shrinking is its shadow as the far side comes near.',
+  },
+  unlinked: {
+    id: 'unlinked',
+    title: 'Out of the chain without a cut',
+    body: 'Two rings were linked. One moved aside in a direction that is not in the room, slid across the other and came back, and now they are apart.',
+    maths:
+      'A circle drawn on the floor cannot be left without crossing it, but a ring in a room can be stepped over: one more direction is always enough to go round. In four dimensions no two rings stay linked and no knot in a string holds, because there is always a way past that touches nothing.',
+  },
 } satisfies Record<string, Discovery>
 
 export type DiscoveryId = keyof typeof discoveries

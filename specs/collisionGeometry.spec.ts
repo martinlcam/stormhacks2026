@@ -8,8 +8,10 @@ import { lightingScenes } from '../src/game/lightingScenes'
 import { buildLightingLab } from '../src/world/lightingLab'
 import * as materials from '../src/world/materials'
 import { biggerInside } from '../src/world/structures/biggerInside'
+import { diskTable } from '../src/world/structures/diskTable'
 import { gravityRoom } from '../src/world/structures/gravityRoom'
 import { hub } from '../src/world/structures/hub'
+import { linkedRings } from '../src/world/structures/linkedRings'
 import { loopCorridor } from '../src/world/structures/loopCorridor'
 import { resizingDoors } from '../src/world/structures/resizingDoors'
 import { sculpture } from '../src/world/structures/sculpture'
@@ -33,7 +35,9 @@ function fixtures() {
       loopCorridor(noop, puzzle),
       resizingDoors(noop, noop, puzzle),
       gravityRoom(noop, noop, puzzle),
-      sculpture(noop),
+      sculpture(noop, noop),
+      linkedRings(noop),
+      diskTable(noop),
       stairwell(noop, puzzle, puzzle),
     ]
     const worlds = structures.map((structure) => {

@@ -280,6 +280,7 @@ const CONTROLS = [
   ['space', 'jump'],
   ['E', 'pick up / put down'],
   ['Q', 'throw (hold to charge)'],
+  ['F', 'turn a wheel (hold)'],
   ['R', 'back to the start'],
   ['M', 'sound off / on'],
   ['esc', 'free the mouse'],

@@ -127,6 +127,16 @@ export interface Structure {
 
 export type Updater = (dt: number, time: number) => void
 
+/* Something the player works by standing at it and holding a key: a crank, a lever. */
+export interface Handle {
+  box: THREE.Box3
+  site: Site
+  /* What holding the key does, for the hint on the screen. */
+  prompt: string
+  /* Called every frame the key is held, with the seconds since the last. */
+  hold(dt: number): void
+}
+
 /*
   The sandbox as data: meshes to draw, boxes to collide with, portals linking
   places together. Structures only ever talk to this class, never the engine.
@@ -137,6 +147,9 @@ export class World {
   readonly colliders: THREE.Box3[] = []
   readonly portals: Portal[] = []
   readonly items: Item[] = []
+  readonly handles: Handle[] = []
+  /* Where the player's feet are, on the map of the site they are at. */
+  readonly visitor = new THREE.Vector3()
   /* The sky, if the world has one. Every door leads to a different one. */
   sky?: Sky
   /* Every site something is built on. */
@@ -382,7 +395,22 @@ export class World {
     this.triggers.push({ box, site: this.site, inside: false, onEnter, onLeave })
   }
 
+  /*
+    Something worked by holding a key while standing in the box. `prompt`
+    says what it does, as "turn the wheel".
+  */
+  addHandle(min: Vec3, max: Vec3, prompt: string, hold: (dt: number) => void) {
+    const box = new THREE.Box3(new THREE.Vector3(...min), new THREE.Vector3(...max))
+    this.handles.push({ box, site: this.site, prompt, hold })
+  }
+
+  /* The handle the player is standing at, if any. */
+  handleAt(player: THREE.Vector3, site: Site = POLE): Handle | undefined {
+    return this.handles.find((handle) => handle.site === site && handle.box.containsPoint(player))
+  }
+
   checkTriggers(player: THREE.Vector3, site: Site = POLE) {
+    this.visitor.copy(player)
     for (const trigger of this.triggers) {
       const inside = trigger.site === site && trigger.box.containsPoint(player)
       if (inside && !trigger.inside) trigger.onEnter()

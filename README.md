@@ -138,4 +138,5 @@ Rules for placing structures on the planet
 - Keep a structure inside the half of the gap that is nearest its own site, because past the halfway line the player is on the next site's map and can walk through it.
 - Put sites at least 45 m from the start, because the pillar ring is 16 m out and must stay inside the start's half of the gap.
 - Every exhibit now stands at the start, within 14 m of it, so that none is a long walk away; sites are for what is built later.
+- The chalk triangle and the rails are the exceptions: they are drawn on the planet itself, a quarter of the way round and further. They are worked out as places on the sphere and put on the map point by point (`src/world/sphere.ts`), so they need no site and are true to shape anywhere.
 - Mark anything that travels round the planet as rigid, because only its centre should go through the map and it must keep its own shape.
