@@ -3,6 +3,7 @@ import { bootstrap } from '../game/bootstrap'
 import { readLightingScene, readLightingView } from '../game/lightingScenes'
 import { Landing } from '../landing/Landing'
 import { preloadAssets } from '../world/preload'
+import { FlagsPanel } from './FlagsPanel'
 import { Hud } from './Hud'
 import { LightingLabPanel } from './LightingLabPanel'
 
@@ -21,7 +22,12 @@ export function App() {
     return () => clearTimeout(timer)
   }, [entered])
 
-  return entered ? <Game /> : <Landing onEnter={() => setEntered(true)} />
+  return (
+    <>
+      {entered ? <Game /> : <Landing onEnter={() => setEntered(true)} />}
+      <FlagsPanel />
+    </>
+  )
 }
 
 function Game() {

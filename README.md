@@ -5,6 +5,34 @@
 - [Original Beyond Euclid challenge PDF](docs/beyond-euclid-challenge.pdf)
 - [Searchable text, including resource links](docs/beyond-euclid-challenge.txt)
 
+## Landing page
+
+`/` opens the landing page: the story from the Figma file (WU), told by scrolling.
+The title washes away to white paper, two drawings come in with their captions
+and glowing gems, and a raindrop falls through them into blue water. Its splash
+brings in the button to the game. Everything follows the scroll, so scrolling up
+plays it backwards. The code is in `src/landing/`, the images in `public/landing/`.
+
+| Address | What it does |
+| --- | --- |
+| `/?p=0.5` | Opens the story part of the way through |
+| `/?auto` or `/?auto=60` | Scrolls by itself, over 45 or 60 seconds |
+| `/?flags` | Shows a panel for switching the flags below |
+| `/#play` | Skips the story |
+
+Flags choose between versions we are still deciding on. Each has a default and can
+be set in the address. They are listed in `src/flags.ts`; once we choose, delete
+the other version and its flag.
+
+| Flag | Options | What it changes |
+| --- | --- | --- |
+| `draw` | `fade`, `speedraw` | How each drawing comes in: a fade, or its pencil lines drawn first |
+| `glow` | `on`, `off` | The gem glows on a layer of its own |
+| `grain` | `on`, `off` | The grain texture from the Figma file |
+| `water` | `texture`, `plain` | The water painted from the blue texture in the Figma file, or plain |
+| `sound` | `on`, `off` | The sound button: wind, rain, a chime for the gem and a drip for the splash |
+| `sky` | `subtle`, `grainy` | The grain in the game's sky |
+
 ## Lighting in the full world
 
 Open `/#play` or enter from the landing page. You start holding the amber lamp,
