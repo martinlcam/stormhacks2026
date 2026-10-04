@@ -189,7 +189,10 @@ gl_Position = projectionMatrix * mvPosition;
 `
 
 /* Make a built-in material draw plaza geometry on the planet. Call before first use. */
-export function planetMaterial(material: THREE.Material) {
+export function planetMaterial(
+  material: THREE.Material,
+  portalTransfer?: { value: THREE.Matrix4 },
+) {
   if (material.userData.planet || (material as THREE.ShaderMaterial).isShaderMaterial) return
   material.userData.planet = true
   if (material.userData.rigid) (material.defines ??= {}).PLANET_RIGID = ''
@@ -201,11 +204,37 @@ export function planetMaterial(material: THREE.Material) {
     before.call(this, shader, renderer)
     Object.assign(shader.uniforms, planetUniforms)
     shader.uniforms.uSite = siteUniform(this)
+    if (portalTransfer) shader.uniforms.uPortalObjectTransfer = portalTransfer
+
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', `#include <common>\n${PARS}`)
-      .replace('#include <project_vertex>', PROJECT)
+      .replace(
+        '#include <common>',
+        `#include <common>\n${PARS}${portalTransfer ? '\nuniform mat4 uPortalObjectTransfer;' : ''}`,
+      )
+      .replace(
+        '#include <project_vertex>',
+        portalTransfer
+          ? PROJECT.replace(
+              'mvPosition = viewMatrix * planetPosition;',
+              'planetPosition = uPortalObjectTransfer * planetPosition;\nmvPosition = viewMatrix * planetPosition;',
+            )
+          : PROJECT,
+      )
+
+    if (portalTransfer) {
+      shader.vertexShader = shader.vertexShader.replace(
+        '#include <normal_vertex>',
+        `transformedNormal = mat3(viewMatrix) * mat3(uPortalObjectTransfer)
+          * inverseTransformDirection(transformedNormal, viewMatrix);
+        #ifdef USE_TANGENT
+          transformedTangent = mat3(viewMatrix) * mat3(uPortalObjectTransfer)
+            * inverseTransformDirection(transformedTangent, viewMatrix);
+        #endif
+        #include <normal_vertex>`,
+      )
+    }
   }
-  material.customProgramCacheKey = () => `planet/${key}`
+  material.customProgramCacheKey = () => `planet/${key}${portalTransfer ? ':portal-object' : ''}`
 }
 
 const siteUniforms = new WeakMap<THREE.Material, { value: THREE.Matrix4 }>()

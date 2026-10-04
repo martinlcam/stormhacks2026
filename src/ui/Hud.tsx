@@ -5,14 +5,22 @@ import { useGame } from '../game/store'
 const CARD_SECONDS = 12
 const TOTAL = Object.keys(discoveries).length
 
-export function Hud({ onPlay }: { onPlay: () => void }) {
+export function Hud({
+  onPlay,
+  showStartScreen = true,
+  showDiscoveries = true,
+}: {
+  onPlay: () => void
+  showStartScreen?: boolean
+  showDiscoveries?: boolean
+}) {
   const playing = useGame((s) => s.playing)
 
   return (
     <div className="pointer-events-none absolute inset-0 select-none font-sans text-bone">
-      {playing ? <Crosshair /> : <StartScreen onPlay={onPlay} />}
-      <Stats />
-      <DiscoveryCard />
+      {playing ? <Crosshair /> : showStartScreen && <StartScreen onPlay={onPlay} />}
+      <Stats showDiscoveries={showDiscoveries} />
+      {showDiscoveries && <DiscoveryCard />}
     </div>
   )
 }
@@ -71,7 +79,7 @@ function StartScreen({ onPlay }: { onPlay: () => void }) {
   )
 }
 
-function Stats() {
+function Stats({ showDiscoveries }: { showDiscoveries: boolean }) {
   const fps = useGame((s) => s.fps)
   const passes = useGame((s) => s.passes)
   const found = useGame((s) => s.found.length)
@@ -81,9 +89,11 @@ function Stats() {
       <div>
         {fps} fps · {passes} views
       </div>
-      <div className="text-cyan/80">
-        {found} / {TOTAL} discovered
-      </div>
+      {showDiscoveries && (
+        <div className="text-cyan/80">
+          {found} / {TOTAL} discovered
+        </div>
+      )}
       {scale !== 1 && <div className="text-purple">size {formatScale(scale)}</div>}
     </div>
   )
