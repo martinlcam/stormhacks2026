@@ -9,6 +9,11 @@ const scene = new THREE.Scene()
 const player = new PlayerController(quietBrowser())
 const avatar = new Avatar(scene, player)
 
+/* Let the figure catch up with wherever the player now is and is looking. */
+const settle = () => {
+  for (let i = 0; i < 5; i++) avatar.update(1)
+}
+
 /* Every point of the body's surface as [distance from the axis, height]. */
 const surface = (() => {
   const position = avatar.body.geometry.getAttribute('position')
@@ -135,12 +140,12 @@ describe("Feature: the player's body", () => {
       player.position.set(0, 0, 0)
       player.yaw = 0
       player.pitch = 0
-      avatar.update()
+      settle()
       scene.updateMatrixWorld(true)
       const level = avatar.stalk.getWorldPosition(new THREE.Vector3())
 
       player.pitch = 0.6
-      avatar.update()
+      settle()
       scene.updateMatrixWorld(true)
       const tipped = avatar.stalk.getWorldPosition(new THREE.Vector3())
 
@@ -166,7 +171,7 @@ describe("Feature: the player's body", () => {
     it('Given I stand on a wall, when the body follows me, then it stands on that wall too', () => {
       player.axis = 'x-'
       player.position.set(5, 3, 1)
-      avatar.update()
+      settle()
 
       const top = avatar.head.getWorldPosition(new THREE.Vector3())
       expect(top.x).toBeLessThan(5 - 0.6)
@@ -178,7 +183,7 @@ describe("Feature: the player's body", () => {
   describe('Scenario: the head turns with my view and with nothing else', () => {
     /* Which way the front of the head points, in the world. */
     const facing = () => {
-      avatar.update()
+      settle()
       scene.updateMatrixWorld(true)
       return new THREE.Vector3(0, 0, -1).transformDirection(avatar.head.matrixWorld)
     }
@@ -205,6 +210,49 @@ describe("Feature: the player's body", () => {
       expect(front.z).toBeCloseTo(0, 6)
     })
 
+    it('Given I flick my view to the left, then the head trails behind for a moment and then catches up', () => {
+      stand()
+      settle()
+      player.yaw = 0.6
+
+      avatar.update(1 / 60)
+      scene.updateMatrixWorld(true)
+      const during = new THREE.Vector3(0, 0, -1).transformDirection(avatar.head.matrixWorld)
+      const after = facing()
+
+      // Facing 0.6 rad left of -Z means x = -sin(0.6).
+      expect(during.x).toBeGreaterThan(-Math.sin(0.6) + 0.2)
+      expect(during.x).toBeLessThan(0)
+      expect(after.x).toBeCloseTo(-Math.sin(0.6), 6)
+    })
+
+    it('Given I look up sharply, then the plant is still tipping back a moment later', () => {
+      stand()
+      settle()
+      player.pitch = 0.8
+
+      avatar.update(1 / 60)
+      scene.updateMatrixWorld(true)
+      const during = new THREE.Vector3(0, 0, -1).transformDirection(avatar.head.matrixWorld)
+
+      expect(during.y).toBeGreaterThan(0.05)
+      expect(during.y).toBeLessThan(Math.sin(0.8) - 0.2)
+      expect(facing().y).toBeCloseTo(Math.sin(0.8), 6)
+      player.pitch = 0
+    })
+
+    it('Given a door turns me half way round in an instant, then the head is turned with me and does not swing round after', () => {
+      stand()
+      settle()
+      player.yaw = Math.PI
+
+      avatar.update(1 / 60)
+      scene.updateMatrixWorld(true)
+      const front = new THREE.Vector3(0, 0, -1).transformDirection(avatar.head.matrixWorld)
+
+      expect(front.z).toBeCloseTo(1, 6)
+    })
+
     it('Given I walk and run without moving my view, then the head does not roll at all', () => {
       stand()
       const still = avatar.head.quaternion.clone()
@@ -216,7 +264,7 @@ describe("Feature: the player's body", () => {
       ]) {
         player.velocity.set(vx, 0, vz)
         player.position.x += vx
-        for (let i = 0; i < 30; i++) avatar.update()
+        for (let i = 0; i < 30; i++) avatar.update(1 / 60)
         expect(avatar.head.quaternion.angleTo(still)).toBeCloseTo(0, 9)
       }
     })

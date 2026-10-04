@@ -25,6 +25,17 @@ const LEAF_WIDTH = 0.06
 const LEAF_THICKNESS = 0.012
 /* How far the leaves lift above level, in radians. */
 const LEAF_LIFT = 0.45
+/*
+  How quickly the head catches up with the view, per second. It trails a
+  little on purpose. The player only ever sees themselves from wherever
+  their own view is, so a head that turned exactly with the view would look
+  the same from every angle and seem not to move at all.
+*/
+const HEAD_FOLLOW = 9
+/* The furthest the head may trail behind the view, in radians. */
+const HEAD_TRAIL = 0.8
+/* A turn this large in one frame is a door turning the player, not the mouse. */
+const DOOR_TURN = 1
 const STALK_GREEN = 0x5aa846
 const LEAF_GREEN = 0x86e05a
 
@@ -42,6 +53,11 @@ function paper(color: number): THREE.MeshStandardMaterial {
     emissiveIntensity: 0.45,
     roughness: 1,
   })
+}
+
+/* An angle brought into the range -π to π. */
+function wrap(angle: number): number {
+  return angle - Math.PI * 2 * Math.round(angle / (Math.PI * 2))
 }
 
 /* How far the centre of the slot's ball is above the rim. */
@@ -71,9 +87,10 @@ function outline(): THREE.Vector2[] {
   ball held in the slot for a head. There are no arms or legs. A small plant
   grows from the top of the head: a stalk with a leaf on each side.
 
-  The head is fixed in its slot. It turns only as the player looks: left and
-  right with the body, up and down with the view. The plant is part of the
-  head and turns with it.
+  The head is fixed in its slot and does not roll. It turns only as the
+  player looks, left and right and up and down, trailing the view by a
+  moment and then settling on it. The plant is part of the head and turns
+  with it, which is what makes the turning visible.
 
   The game stays first person. The body is drawn where the player stands, so
   they see it when they look down, and the whole figure when a doorway shows
@@ -87,6 +104,10 @@ export class Avatar {
   /* Left leaf, then right leaf. */
   readonly leaves: THREE.Mesh[] = []
   private readonly group = new THREE.Group()
+  /* Where the head is pointing, which trails where the player is looking. */
+  private headYaw = 0
+  private headPitch = 0
+  private lastYaw = 0
 
   constructor(
     scene: THREE.Scene,
@@ -129,7 +150,7 @@ export class Avatar {
   }
 
   /* Follow the player. */
-  update() {
+  update(dt: number) {
     const { player, group, head } = this
     group.position.copy(player.position)
     // Stand on whatever surface the player stands on, turned to face their way.
@@ -137,7 +158,19 @@ export class Avatar {
       .setFromRotationMatrix(frameFor(player.axis))
       .multiply(turn.setFromAxisAngle(UP, player.yaw))
     group.scale.setScalar(player.scale)
-    // The body has already turned left or right; the head adds looking up or down.
-    head.rotation.set(player.pitch, 0, 0)
+
+    // A door that turns the player turns the head with them, all at once.
+    const turned = wrap(player.yaw - this.lastYaw)
+    if (Math.abs(turned) > DOOR_TURN) this.headYaw += turned
+    this.lastYaw = player.yaw
+
+    // Otherwise the head eases towards the view, and never trails far.
+    const ease = 1 - Math.exp(-HEAD_FOLLOW * dt)
+    let behind = wrap(player.yaw - this.headYaw)
+    behind = Math.max(-HEAD_TRAIL, Math.min(HEAD_TRAIL, behind))
+    this.headYaw = player.yaw - behind * (1 - ease)
+    this.headPitch += (player.pitch - this.headPitch) * ease
+    // The body already faces the way the player does; the head is set relative to it.
+    head.rotation.set(this.headPitch, this.headYaw - player.yaw, 0, 'YXZ')
   }
 }
