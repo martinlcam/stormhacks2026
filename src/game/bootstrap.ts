@@ -12,7 +12,7 @@ import { sculpture } from '../world/structures/sculpture'
 import { stairwell } from '../world/structures/stairwell'
 import { Avatar } from './avatar'
 import { ItemSystem } from './items'
-import type { DiscoveryId } from './discoveries'
+import { type DiscoveryId, discoveries } from './discoveries'
 import type { LightingScene, LightingView } from './lightingScenes'
 import { useLightingSettings } from './lightingSettings'
 import { Sound } from './sound'
@@ -100,6 +100,10 @@ export function bootstrap(
       // R: back to the start. M: sound off or on.
       if (event.code === 'KeyR') engine.player.respawn()
       if (event.code === 'KeyM') sound.toggle()
+      // End: a secret. Everything is found at once, which brings on the ending.
+      if (event.code === 'End' && !lightingScene) {
+        for (const id of Object.keys(discoveries) as DiscoveryId[]) game.discover(id)
+      }
     },
     { signal: keys.signal },
   )
@@ -133,8 +137,8 @@ export function bootstrap(
   engine.start()
 
   if (import.meta.env.DEV) {
-    // Handy in the console: __engine.player.position.set(...)
-    Object.assign(window, { __engine: engine, __items: items, __sound: sound })
+    // Handy in the console: __engine.player.position.set(...), __game.getState().discover(...)
+    Object.assign(window, { __engine: engine, __items: items, __sound: sound, __game: useGame })
   }
 
   return () => {
