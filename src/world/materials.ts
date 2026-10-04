@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { FILM_PARS, filmUniforms } from '../engine/film'
 import { planetUniforms } from '../engine/planet'
 import { readFlag } from '../flags'
 
@@ -186,6 +187,7 @@ export function createSky(top = 0x05030a, horizon = 0x3a1a52): THREE.Mesh {
       top: { value: new THREE.Color(top) },
       horizon: { value: new THREE.Color(horizon) },
       uSkyUp: planetUniforms.uSkyUp,
+      ...filmUniforms,
     },
     vertexShader: /* glsl */ `
       varying vec3 vDirection;
@@ -201,6 +203,7 @@ export function createSky(top = 0x05030a, horizon = 0x3a1a52): THREE.Mesh {
       uniform vec3 horizon;
       uniform vec3 uSkyUp;
       varying vec3 vDirection;
+      ${FILM_PARS}
       void main() {
         // Height above the horizon of whoever is looking, wherever on the
         // planet they stand.
@@ -208,6 +211,7 @@ export function createSky(top = 0x05030a, horizon = 0x3a1a52): THREE.Mesh {
         vec3 color = mix(horizon, top, smoothstep(-0.05, 0.6, h));
         gl_FragColor = vec4(color, 1.0);
         #include <colorspace_fragment>
+        gl_FragColor.rgb = filmColour(gl_FragColor.rgb);
       }
     `,
   })
@@ -260,6 +264,7 @@ export class Sky {
     seed: { value: 0 },
     grain: { value: SKY_GRAIN },
     uSkyUp: planetUniforms.uSkyUp,
+    ...filmUniforms,
   }
 
   constructor() {
@@ -284,6 +289,7 @@ export class Sky {
         uniform float grain;
         uniform vec3 uSkyUp;
         varying vec3 vDirection;
+        ${FILM_PARS}
 
         float hash(vec3 p) {
           p = fract(p * 0.3183099 + 0.1);
@@ -330,6 +336,8 @@ export class Sky {
           colour += (hash(vec3(gl_FragCoord.xy, seed)) - 0.5) * grain;
           gl_FragColor = vec4(colour, 1.0);
           #include <colorspace_fragment>
+          // The sky loses its colours with everything under it. It has grain of its own.
+          gl_FragColor.rgb = filmColour(gl_FragColor.rgb);
         }
       `,
     })

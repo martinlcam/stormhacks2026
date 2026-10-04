@@ -1,4 +1,5 @@
 import { Engine } from '../engine/Engine'
+import { RAINBOW, resetFilm, restoreColours } from '../engine/film'
 import { PortalLighting } from '../engine/PortalLighting'
 import { World } from '../world/World'
 import { buildLightingLab } from '../world/lightingLab'
@@ -49,6 +50,12 @@ export function bootstrap(
     useLightingSettings.setState({ lampEnabled: false, lanternEnabled: true })
   }
 
+  // The world is grey, and each puzzle solved puts a colour back. The lighting
+  // lab keeps its colours and has no grain.
+  const puzzles = new Set<DiscoveryId>()
+  const solved = () => useGame.getState().found.filter((id) => puzzles.has(id)).length
+
+  const sound = new Sound()
   const world = new World()
   const lightingLab = lightingScene
     ? buildLightingLab(world, lightingScene, lightingView, lanternTexture)
@@ -58,14 +65,17 @@ export function bootstrap(
     // A puzzle shows its goal while the player is at it, and is a discovery once solved.
     // Two puzzles can be within reach at once: each goal is a line of its own.
     const goals = new Map<DiscoveryId, string>()
-    const puzzle = (id: DiscoveryId) => ({
-      hint: (text: string | null) => {
-        goals.delete(id)
-        if (text !== null) goals.set(id, text)
-        game.setGoal([...goals.values()].join('\n') || null)
-      },
-      solved: () => game.discover(id),
-    })
+    const puzzle = (id: DiscoveryId) => {
+      puzzles.add(id)
+      return {
+        hint: (text: string | null) => {
+          goals.delete(id)
+          if (text !== null) goals.set(id, text)
+          game.setGoal([...goals.values()].join('\n') || null)
+        },
+        solved: () => game.discover(id),
+      }
+    }
     // Add a structure here and it is part of the sandbox.
     const structures = [
       hub,
@@ -95,6 +105,7 @@ export function bootstrap(
 
     for (const structure of structures) world.build(structure)
   }
+  resetFilm(lightingScene ? RAINBOW.length : solved(), !lightingScene)
 
   const worldLamp = lightingLab ? undefined : addWorldLamp(world)
   const worldLantern = lightingLab ? undefined : addLantern(world, [-0.9, 0.4, 0.5], lanternTexture)
@@ -104,7 +115,6 @@ export function bootstrap(
   const spawn = lightingLab ? lightingLab.spawn : ([0, 0, 2] as const)
   engine.player.spawn.fromArray(spawn)
   engine.player.respawn()
-  const sound = new Sound()
   engine.player.onLockChange = (locked) => {
     game.setPlaying(locked)
     // The click that captures the mouse is what lets the browser play sound.
@@ -112,6 +122,7 @@ export function bootstrap(
   }
   const stopListening = useGame.subscribe((now, before) => {
     if (now.found.length > before.found.length) sound.chime()
+    if (!lightingScene) restoreColours(solved())
   })
   const keys = new AbortController()
   window.addEventListener(

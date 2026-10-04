@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import type { World } from '../world/World'
+import { filmUniforms, stepFilm } from './film'
 import { configurePlanet, keepNearestSite, onPlanet, upAt } from './planet'
 import { PlayerController } from './PlayerController'
 import { PortalRenderer } from './PortalRenderer'
@@ -87,6 +88,7 @@ export class Engine {
     }
     this.world.checkTriggers(this.player.position, this.player.site)
     this.world.update(dt, this.timer.getElapsed())
+    stepFilm(elapsed, this.timer.getElapsed())
     this.player.applyTo(this.camera)
     // On the planet up depends on where you stand; elsewhere on which
     // surface the player is walking on.
@@ -112,6 +114,7 @@ export class Engine {
     const { clientWidth, clientHeight } = this.canvas
     if (clientWidth === 0 || clientHeight === 0) return
     this.renderer.setSize(clientWidth, clientHeight, false)
+    filmUniforms.uFilmSpeck.value = this.renderer.getPixelRatio()
     this.camera.aspect = clientWidth / clientHeight
     this.camera.updateProjectionMatrix()
   }

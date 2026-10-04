@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { FILM_GRADE, FILM_PARS, filmUniforms } from './film'
 
 /*
   The plaza as a real sphere.
@@ -224,13 +225,14 @@ export function planetMaterial(
   if (material.userData.planet || (material as THREE.ShaderMaterial).isShaderMaterial) return
   material.userData.planet = true
   if (material.userData.rigid) (material.defines ??= {}).PLANET_RIGID = ''
+  if (material.userData.item) (material.defines ??= {}).FILM_ITEM = ''
   // A material may already change its own shader; keep that.
   const before = material.onBeforeCompile
   const key = material.customProgramCacheKey()
   // `this` and not `material`: a copy of the material for another site shares this function.
   material.onBeforeCompile = function (this: THREE.Material, shader, renderer) {
     before.call(this, shader, renderer)
-    Object.assign(shader.uniforms, planetUniforms)
+    Object.assign(shader.uniforms, planetUniforms, filmUniforms)
     shader.uniforms.uSite = siteUniform(this)
     if (portalTransfer) shader.uniforms.uPortalObjectTransfer = portalTransfer
 
@@ -249,6 +251,11 @@ export function planetMaterial(
           : PROJECT,
       )
 
+    // The film look goes on last, over the colour as the screen will show it.
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>\n${FILM_PARS}`)
+      .replace('#include <dithering_fragment>', `${FILM_GRADE}\n#include <dithering_fragment>`)
+
     if (portalTransfer) {
       shader.vertexShader = shader.vertexShader.replace(
         '#include <normal_vertex>',
@@ -262,7 +269,8 @@ export function planetMaterial(
       )
     }
   }
-  material.customProgramCacheKey = () => `planet/${key}${portalTransfer ? ':portal-object' : ''}`
+  material.customProgramCacheKey = () =>
+    `planet/film/${key}${portalTransfer ? ':portal-object' : ''}`
 }
 
 const siteUniforms = new WeakMap<THREE.Material, { value: THREE.Matrix4 }>()

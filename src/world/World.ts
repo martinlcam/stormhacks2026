@@ -224,6 +224,8 @@ export class World {
     const mesh = new THREE.Mesh(new THREE.IcosahedronGeometry(radius, 0), material)
     // An item can be carried right round the planet; it keeps its shape there.
     material.userData.rigid = true
+    // And carries a little film grain wherever it is.
+    material.userData.item = true
     mesh.frustumCulled = false
     this.scene.add(mesh)
     const body = new Body(radius)
