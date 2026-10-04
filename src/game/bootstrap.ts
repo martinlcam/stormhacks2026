@@ -4,6 +4,7 @@ import { biggerInside } from '../world/structures/biggerInside'
 import { hub } from '../world/structures/hub'
 import { loopCorridor } from '../world/structures/loopCorridor'
 import { resizingDoors } from '../world/structures/resizingDoors'
+import { Avatar } from './avatar'
 import { ItemSystem } from './items'
 import { useGame } from './store'
 
@@ -39,7 +40,11 @@ export function bootstrap(canvas: HTMLCanvasElement): () => void {
     charge: (level) => game.setCharge(level),
     thrownThrough: () => game.discover('thrown-through'),
   })
-  world.onUpdate((dt) => items.update(dt))
+  const avatar = new Avatar(world.scene, engine.player)
+  world.onUpdate((dt) => {
+    items.update(dt)
+    avatar.update(dt, items.holding)
+  })
   engine.start()
 
   if (import.meta.env.DEV) {

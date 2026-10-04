@@ -9,6 +9,12 @@ import type { Portal } from './Portal'
 const NO_CLIP = new THREE.Plane(new THREE.Vector3(0, 1, 0), 1e6)
 
 /*
+  Objects on this layer are left out of the player's own view and drawn only
+  in views through portals: the parts of the player that surround the eye.
+*/
+export const PORTAL_ONLY_LAYER = 1
+
+/*
   Draws a scene containing portals using the stencil buffer.
 
   For a camera at recursion level L (0 = the player's eye) the stencil value
@@ -187,7 +193,11 @@ export class PortalRenderer {
   }
 
   private cameraFor(level: number, source: THREE.PerspectiveCamera) {
-    const camera = (this.cameras[level] ??= new THREE.PerspectiveCamera())
+    let camera = this.cameras[level]
+    if (!camera) {
+      camera = this.cameras[level] = new THREE.PerspectiveCamera()
+      camera.layers.enable(PORTAL_ONLY_LAYER)
+    }
     camera.projectionMatrix.copy(source.projectionMatrix)
     camera.projectionMatrixInverse.copy(source.projectionMatrixInverse)
     return camera

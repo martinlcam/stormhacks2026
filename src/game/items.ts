@@ -207,6 +207,11 @@ export class ItemSystem {
     this.abort.abort()
   }
 
+  /* The item being carried, if any. */
+  get holding(): Item | null {
+    return this.held
+  }
+
   /* E: pick up what the crosshair is on, or put down what is held. */
   use() {
     if (this.held) {
