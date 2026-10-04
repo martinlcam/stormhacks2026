@@ -3,7 +3,7 @@ import { discoveries } from '../game/discoveries'
 import { useGame } from '../game/store'
 import { PAGE_GRAIN, type Rect, percent, place } from '../landing/art'
 import { FRAME } from '../landing/timeline'
-import { Wash } from './Wash'
+import { PaperButton } from './PaperButton'
 
 const TOTAL = Object.keys(discoveries).length
 /* How long the last card is left to be read, and how long the fade to white takes. */
@@ -63,29 +63,38 @@ const BLOB_PATH = [
 export type EndingPhase = 'waiting' | 'fading' | 'shown' | 'dismissed'
 
 /*
-  The ending, once every point is scored: the last card is left up for a
-  moment, the world fades to white, and then the ending screen appears.
+  The ending. Once every point is scored, the last card is left up for a
+  moment to be read; when the player ends the game (P, or credits in the
+  pause menu), it comes at once, with the score as it is. Either way the
+  world fades to white, and then the ending screen appears.
 */
 export function useEnding(enabled: boolean) {
   const complete = useGame((s) => s.found.length === TOTAL)
+  const ends = useGame((s) => s.ends)
   const [phase, setPhase] = useState<EndingPhase>('waiting')
+  // How many of the player's asks for the end have been answered.
+  const answered = useRef(0)
 
   useEffect(() => {
-    if (!enabled || !complete) return
-    const fade = setTimeout(() => setPhase('fading'), WAIT_SECONDS * 1000)
+    if (!enabled) return
+    const asked = ends > answered.current
+    answered.current = ends
+    if (!asked && !complete) return
+    const wait = asked ? 0 : WAIT_SECONDS
+    const fade = setTimeout(() => setPhase('fading'), wait * 1000)
     const show = setTimeout(
       () => {
         setPhase('shown')
         // Give the mouse back, for the buttons.
         document.exitPointerLock()
       },
-      (WAIT_SECONDS + FADE_SECONDS) * 1000,
+      (wait + FADE_SECONDS) * 1000,
     )
     return () => {
       clearTimeout(fade)
       clearTimeout(show)
     }
-  }, [enabled, complete])
+  }, [enabled, complete, ends])
 
   return { phase, dismiss: () => setPhase('dismissed') }
 }
@@ -335,32 +344,5 @@ function Type({
     >
       {children}
     </p>
-  )
-}
-
-/* A button written on a scrap of watercolour paper. */
-function PaperButton({
-  onClick,
-  focusable,
-  seed,
-  bloom = false,
-  children,
-}: {
-  onClick: () => void
-  focusable: boolean
-  seed: number
-  bloom?: boolean
-  children: string
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      tabIndex={focusable ? 0 : -1}
-      className="relative cursor-pointer border-0 bg-transparent px-8 py-4 text-sm font-light tracking-[-0.03em] text-ink transition-transform hover:scale-105"
-    >
-      <Wash rough={9} seed={seed} radius={16} blooms={bloom ? ['blue'] : []} />
-      <span className="relative">{children}</span>
-    </button>
   )
 }

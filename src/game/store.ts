@@ -25,6 +25,11 @@ interface GameState {
   charge: number | null
   /* The goals of the puzzles the player is standing at, one to a line, if any. */
   goal: string | null
+  /*
+    How many times the player has asked for the end (P, or credits in the
+    pause menu). Each time brings on the ending, with the score as it is.
+  */
+  ends: number
 
   setPlaying(playing: boolean): void
   learn(lesson: Lesson): void
@@ -34,6 +39,7 @@ interface GameState {
   setGoal(goal: string | null): void
   discover(id: DiscoveryId): void
   dismissCard(): void
+  end(): void
 }
 
 /*
@@ -52,6 +58,7 @@ export const useGame = create<GameState>((set, get) => ({
   prompt: null,
   charge: null,
   goal: null,
+  ends: 0,
 
   setPlaying: (playing) => set({ playing, everPlayed: get().everPlayed || playing }),
   learn: (lesson) => {
@@ -67,4 +74,5 @@ export const useGame = create<GameState>((set, get) => ({
     set({ found: [...get().found, id], card: discoveries[id] })
   },
   dismissCard: () => set({ card: null }),
+  end: () => set({ ends: get().ends + 1 }),
 }))

@@ -24,13 +24,15 @@ type Phase = 'showing' | 'fading' | 'gone'
   come in, written on a wash of watercolour paper like the landing page.
   Each is struck through and ticked the first time it is used, and once all
   of them are, the panel fades away and does not come back. It also fades
-  once everything in the world is found, so it is gone before the ending.
+  once everything in the world is found or the player ends the game, so it
+  is gone before the ending.
 */
 export function Onboarding() {
   const playing = useGame((s) => s.playing)
   const learned = useGame((s) => s.learned)
   const complete = useGame((s) => s.found.length === TOTAL)
-  const done = complete || Object.values(learned).every(Boolean)
+  const ended = useGame((s) => s.ends > 0)
+  const done = complete || ended || Object.values(learned).every(Boolean)
   const [phase, setPhase] = useState<Phase>('showing')
 
   useEffect(() => {

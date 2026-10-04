@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { discoveries } from '../game/discoveries'
 import { useGame } from '../game/store'
 import { Ending, useEnding } from './Ending'
+import { PaperButton } from './PaperButton'
 import { Wash } from './Wash'
 
 const CARD_SECONDS = 12
@@ -23,12 +24,17 @@ export function Hud({
   showDiscoveries?: boolean
 }) {
   const playing = useGame((s) => s.playing)
+  const end = useGame((s) => s.end)
   const ending = useEnding(showDiscoveries)
   const ended = ending.phase === 'shown'
 
   return (
     <div className="pointer-events-none absolute inset-0 font-sans select-none">
-      {playing ? <Crosshair /> : showStartScreen && !ended && <StartScreen onPlay={onPlay} />}
+      {playing ? (
+        <Crosshair />
+      ) : (
+        showStartScreen && !ended && <StartScreen onPlay={onPlay} onCredits={end} />
+      )}
       {playing && <Goal />}
       <Stats />
       {showDiscoveries && <Points />}
@@ -136,15 +142,23 @@ function Goal() {
   )
 }
 
-/* What the game is and how to play it, while the mouse is free. A click anywhere goes on. */
-function StartScreen({ onPlay }: { onPlay: () => void }) {
+/*
+  What the game is and how to play it, while the mouse is free: at the start,
+  and as the pause menu. A click anywhere goes on, and credits ends the game.
+*/
+function StartScreen({ onPlay, onCredits }: { onPlay: () => void; onCredits: () => void }) {
   return (
-    <button
-      type="button"
-      onClick={onPlay}
-      className="pointer-events-auto absolute inset-0 flex cursor-pointer items-center justify-center border-0 bg-night/55 p-4 backdrop-blur-[2px]"
-    >
-      <div className="relative w-[min(30rem,100%)] px-14 pt-12 pb-14 text-left font-light text-caption">
+    <div className="pointer-events-auto absolute inset-0 flex items-center justify-center p-4">
+      {/* The whole window is the way back in, under the sheet. */}
+      <button
+        type="button"
+        onClick={onPlay}
+        aria-label="click to enter"
+        className="absolute inset-0 cursor-pointer border-0 bg-night/55 backdrop-blur-[2px]"
+      />
+
+      {/* Clicks on the sheet go through to the button under it, all but those on credits. */}
+      <div className="pointer-events-none relative w-[min(30rem,100%)] px-14 pt-12 pb-14 text-left font-light text-caption">
         <Wash rough={34} seed={2} radius={40} blooms={['green', 'blue']} />
         <div className="relative">
           <p className="m-0 text-lg tracking-[-0.04em]">click to enter</p>
@@ -161,9 +175,14 @@ function StartScreen({ onPlay }: { onPlay: () => void }) {
               </div>
             ))}
           </dl>
+          <div className="pointer-events-auto mt-6 -ml-2 w-max">
+            <PaperButton onClick={onCredits} seed={41}>
+              credits
+            </PaperButton>
+          </div>
         </div>
       </div>
-    </button>
+    </div>
   )
 }
 
@@ -177,6 +196,7 @@ const CONTROLS = [
   ['F', 'turn a wheel (hold)'],
   ['R', 'back to the start'],
   ['M', 'sound off / on'],
+  ['P', 'end the game'],
   ['esc', 'free the mouse'],
 ] as const
 

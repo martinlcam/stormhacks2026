@@ -18,7 +18,7 @@ import { sculpture } from '../world/structures/sculpture'
 import { stairwell } from '../world/structures/stairwell'
 import { Avatar } from './avatar'
 import { ItemSystem } from './items'
-import { type DiscoveryId, discoveries } from './discoveries'
+import type { DiscoveryId } from './discoveries'
 import type { LightingScene, LightingView } from './lightingScenes'
 import { useLightingSettings } from './lightingSettings'
 import { Sound } from './sound'
@@ -155,10 +155,8 @@ export function bootstrap(
       if (event.code === 'KeyR') engine.player.respawn()
       if (event.code === 'KeyM') sound.toggle()
       if (event.code === 'KeyF') turning = true
-      // P: a secret. Everything is found at once, which brings on the ending.
-      if (event.code === 'KeyP' && !lightingScene) {
-        for (const id of Object.keys(discoveries) as DiscoveryId[]) game.discover(id)
-      }
+      // P: end the game here, with the score as it is, and go to the credits.
+      if (event.code === 'KeyP' && !lightingScene) game.end()
       // The first time the player walks and jumps, the controls shown to new players tick them off.
       if (WALK_KEYS.has(event.code)) game.learn('move')
       if (event.code === 'Space') game.learn('jump')
