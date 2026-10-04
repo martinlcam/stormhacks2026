@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { planetUniforms } from '../engine/planet'
+import { readFlag } from '../flags'
 
 export const palette = {
   purple: 0xc252e1,
@@ -220,6 +221,12 @@ export function createSky(top = 0x05030a, horizon = 0x3a1a52): THREE.Mesh {
 const SKY_DIM = 0.15
 
 /*
+  How strong the fine grain in the sky is: as it was, or (`?sky=grainy`)
+  enough to read as the paper grain of the landing page.
+*/
+const SKY_GRAIN = readFlag('sky') === 'grainy' ? 0.07 : 0.025
+
+/*
   The skies, each as three colours: overhead, part of the way down, and at
   the horizon. The first two are the dusk and the storm from the landing
   page; the rest are made in the same manner.
@@ -251,6 +258,7 @@ export class Sky {
     horizon: { value: new THREE.Color() },
     /* Moves the noise, so that no two skies have the same clouds. */
     seed: { value: 0 },
+    grain: { value: SKY_GRAIN },
     uSkyUp: planetUniforms.uSkyUp,
   }
 
@@ -273,6 +281,7 @@ export class Sky {
         uniform vec3 middle;
         uniform vec3 horizon;
         uniform float seed;
+        uniform float grain;
         uniform vec3 uSkyUp;
         varying vec3 vDirection;
 
@@ -318,7 +327,7 @@ export class Sky {
           // Lighter and darker patches, as in a wash of paint.
           colour *= 0.9 + 0.2 * clouds(direction * 5.0 - seed);
           // Fine grain, which also hides the steps in a smooth gradient.
-          colour += (hash(vec3(gl_FragCoord.xy, seed)) - 0.5) * 0.025;
+          colour += (hash(vec3(gl_FragCoord.xy, seed)) - 0.5) * grain;
           gl_FragColor = vec4(colour, 1.0);
           #include <colorspace_fragment>
         }
