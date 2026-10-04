@@ -33,7 +33,7 @@ export const lightingScenes = [
 ] as const
 
 export type LightingScene = (typeof lightingScenes)[number]
-export type LightingView = 'default' | 'doorway' | 'threshold'
+export type LightingView = 'default' | 'doorway' | 'threshold' | 'lantern'
 
 export function readLightingScene(search: string): LightingScene | undefined {
   const id = new URLSearchParams(search).get('scene')
@@ -42,5 +42,5 @@ export function readLightingScene(search: string): LightingScene | undefined {
 
 export function readLightingView(search: string): LightingView {
   const view = new URLSearchParams(search).get('view')
-  return view === 'doorway' || view === 'threshold' ? view : 'default'
+  return view === 'doorway' || view === 'threshold' || view === 'lantern' ? view : 'default'
 }

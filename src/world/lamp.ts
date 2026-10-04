@@ -3,19 +3,34 @@ import { siteUniform } from '../engine/planet'
 import { PortalItemView, splitEmitter } from '../engine/PortalItemView'
 import type { World } from './World'
 
+export interface LampAppearance {
+  geometry: THREE.BufferGeometry
+  material: THREE.MeshStandardMaterial
+  radius: number
+}
+
 /* The same carryable emitter powers the game and the isolated lighting lab. */
 export function addLamp(
   world: World,
   position: readonly [number, number, number],
   name = 'amber-lamp',
+  appearance?: LampAppearance,
 ) {
-  const material = new THREE.MeshStandardMaterial({
-    color: 0xffbf75,
-    emissive: 0xffa342,
-    emissiveIntensity: 2,
-    roughness: 0.35,
-  })
-  const lamp = world.addItem({ position, radius: 0.25, material })
+  const material =
+    appearance?.material ??
+    new THREE.MeshStandardMaterial({
+      color: 0xffbf75,
+      emissive: 0xffa342,
+      emissiveIntensity: 2,
+      roughness: 0.35,
+    })
+  const emission = material.emissiveIntensity
+  const lamp = world.addItem({ position, radius: appearance?.radius ?? 0.25, material })
+  if (appearance) {
+    lamp.mesh.geometry.dispose()
+    lamp.mesh.geometry = appearance.geometry
+  }
+
   lamp.mesh.name = name
   const lampView = new PortalItemView(lamp.mesh, material, lamp.body.baseRadius, world.portals)
   siteUniform(lampView.material).value = lamp.body.site.motion
@@ -35,7 +50,7 @@ export function addLamp(
 
     /* Run after ItemSystem has placed the displayed mesh and chosen its site. */
     update(enabled = true) {
-      material.emissiveIntensity = enabled ? 2 : 0
+      material.emissiveIntensity = enabled ? emission : 0
       lampView.update()
       const size = lamp.mesh.scale.x
       light.position.copy(lampView.center)

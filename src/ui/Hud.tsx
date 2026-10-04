@@ -200,7 +200,7 @@ function StartScreen({ onPlay }: { onPlay: () => void }) {
       <p className="text-lg text-bone/80">Click to enter</p>
       <p className="max-w-sm px-4 text-center text-sm text-bone/80">
         You start holding the amber lamp. Carry its light through the doorways, press E to put it
-        down, or hold Q to throw it.
+        down, or hold Q to throw it. There’s also a Minecraft lantern on the ground to your left.
       </p>
       <dl className="grid grid-cols-[auto_auto] gap-x-4 gap-y-1 text-left text-sm text-bone/60">
         <dt className="font-medium text-cyan">WASD</dt>

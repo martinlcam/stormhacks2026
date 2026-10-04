@@ -3,6 +3,7 @@ import { PortalLighting } from '../engine/PortalLighting'
 import { World } from '../world/World'
 import { buildLightingLab } from '../world/lightingLab'
 import { addWorldLamp } from '../world/lamp'
+import { addLantern, loadLanternTexture } from '../world/lantern'
 import { biggerInside } from '../world/structures/biggerInside'
 import { gravityRoom } from '../world/structures/gravityRoom'
 import { hub } from '../world/structures/hub'
@@ -43,10 +44,14 @@ export function bootstrap(
   { paused = false } = {},
 ): Game {
   const game = useGame.getState()
+  const lanternTexture = loadLanternTexture()
+  if (lightingView === 'lantern') {
+    useLightingSettings.setState({ lampEnabled: false, lanternEnabled: true })
+  }
 
   const world = new World()
   const lightingLab = lightingScene
-    ? buildLightingLab(world, lightingScene, lightingView)
+    ? buildLightingLab(world, lightingScene, lightingView, lanternTexture)
     : undefined
 
   if (!lightingScene) {
@@ -92,6 +97,7 @@ export function bootstrap(
   }
 
   const worldLamp = lightingLab ? undefined : addWorldLamp(world)
+  const worldLantern = lightingLab ? undefined : addLantern(world, [-0.9, 0.4, 0.5], lanternTexture)
   world.finalize()
 
   const engine = new Engine(canvas, world)
@@ -139,7 +145,7 @@ export function bootstrap(
 
   engine.onStats = ({ fps, passes, scale }) => game.setStats(fps, passes, scale)
 
-  const lights = lightingLab?.lights ?? worldLamp!.lights
+  const lights = lightingLab?.lights ?? [...worldLamp!.lights, ...worldLantern!.lights]
   engine.portalRenderer.portalLighting = new PortalLighting(lights, world.portals)
 
   const items = new ItemSystem(
@@ -159,13 +165,14 @@ export function bootstrap(
     },
     worldLamp?.lamp,
   )
-  const avatar = new Avatar(world.scene, engine.player)
+  const avatar = new Avatar(world.scene, engine.player, world.portals)
   world.onUpdate((dt) => {
     items.update(dt)
     sound.update(dt, engine.player)
     avatar.update()
-    lightingLab?.update(useLightingSettings.getState())
+    lightingLab?.update(useLightingSettings.getState(), dt)
     worldLamp?.update()
+    worldLantern?.update(true, dt)
   })
 
   if (paused) {
@@ -191,8 +198,10 @@ export function bootstrap(
       stopListening()
       sound.dispose()
       items.dispose()
+      avatar.dispose()
       lightingLab?.dispose()
       worldLamp?.dispose()
+      worldLantern?.dispose()
       engine.dispose()
     },
   }

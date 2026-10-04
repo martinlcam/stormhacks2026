@@ -1,10 +1,14 @@
 import { afterEach, describe, expect, it } from 'bun:test'
-import { configurePlanet } from '../src/engine/planet'
+import * as THREE from 'three'
+import { configurePlanet, planetMotion } from '../src/engine/planet'
 import { splitEmitter } from '../src/engine/PortalItemView'
 import { PortalLighting } from '../src/engine/PortalLighting'
+import { PlayerController } from '../src/engine/PlayerController'
+import { Avatar } from '../src/game/avatar'
 import { lightingScenes } from '../src/game/lightingScenes'
 import { buildLightingLab } from '../src/world/lightingLab'
 import { World } from '../src/world/World'
+import { quietBrowser } from './support'
 
 afterEach(() => configurePlanet(null))
 
@@ -16,7 +20,7 @@ function threshold(curved = false) {
 
   for (const portal of world.portals) portal.settle()
 
-  lab.update({ lampEnabled: true, referenceEnabled: false })
+  lab.update({ lampEnabled: true, lanternEnabled: false, referenceEnabled: false })
   return { world, lab }
 }
 
@@ -61,7 +65,7 @@ describe('A lamp straddling a portal', () => {
       expect(transport.samples[0].radiance.r).toBeGreaterThan(0)
       expect(transport.samples[3].radiance.r).toBeGreaterThan(0)
 
-      lab.update({ lampEnabled: false, referenceEnabled: false })
+      lab.update({ lampEnabled: false, lanternEnabled: false, referenceEnabled: false })
       transport.update()
       expect(lab.lights.every((light) => light.intensity === 0)).toBe(true)
       expect(transport.samples.every((sample) => sample.radiance.r === 0)).toBe(true)
@@ -77,7 +81,7 @@ describe('A lamp straddling a portal', () => {
         intensity: light.intensity,
       }))
       lab.lamp.mesh.position.applyMatrix4(world.portals[0].transform)
-      lab.update({ lampEnabled: true, referenceEnabled: false })
+      lab.update({ lampEnabled: true, lanternEnabled: false, referenceEnabled: false })
       expect(lab.lampView.crossing).toBe(world.portals[1])
 
       // The main light becomes the far portion and the copy becomes the near
@@ -92,7 +96,7 @@ describe('A lamp straddling a portal', () => {
   it('stops splitting away from the opening and cleans up the extra mesh', () => {
     const { world, lab } = threshold()
     lab.lamp.mesh.position.set(3, 1.15, -6)
-    lab.update({ lampEnabled: true, referenceEnabled: false })
+    lab.update({ lampEnabled: true, lanternEnabled: false, referenceEnabled: false })
     expect(lab.lampView.crossing).toBeUndefined()
     expect(lab.lampView.copy.visible).toBe(false)
     expect(lab.lights[0].intensity).toBe(40)
@@ -121,5 +125,46 @@ describe('A lamp straddling a portal', () => {
     }
 
     expect(previous).toBe(1)
+  })
+})
+
+describe('A player straddling a portal', () => {
+  it('carries nested body and head geometry across the plane in world space', () => {
+    for (const curved of [false, true]) {
+      const { world } = threshold(curved)
+      const player = new PlayerController(quietBrowser())
+      player.position.set(0, 0, -6)
+      const avatar = new Avatar(world.scene, player, world.portals)
+      avatar.update()
+
+      for (const [index, mesh] of [avatar.body, avatar.head].entries()) {
+        const crossing = avatar.crossings[index]
+        const anchor = new THREE.Vector3().setFromMatrixPosition(mesh.matrixWorld)
+        const expectedCenter = mesh.geometry
+          .boundingSphere!.center.clone()
+          .applyMatrix4(mesh.matrixWorld)
+          .applyMatrix4(planetMotion(anchor, new THREE.Matrix4()))
+
+        expect(crossing.crossing).toBe(world.portals[0])
+        expect(crossing.center.distanceTo(expectedCenter)).toBeLessThan(1e-8)
+        expect(crossing.copy.parent).toBe(world.scene)
+        expect(crossing.copy.matrix.equals(mesh.matrixWorld)).toBe(true)
+        expect(crossing.copy.visible).toBe(true)
+
+        const nearClip = crossing.material.clippingPlanes![0]
+        const farClip = crossing.copy.material.clippingPlanes![0]
+        const sample = crossing.center.clone().addScaledVector(nearClip.normal, 0.05)
+        expect(nearClip.distanceToPoint(sample)).toBeCloseTo(
+          -farClip.distanceToPoint(sample.clone().applyMatrix4(world.portals[0].view)),
+          8,
+        )
+      }
+
+      player.position.z = -4
+      avatar.update()
+      expect(avatar.crossings.every((crossing) => !crossing.copy.visible)).toBe(true)
+      avatar.dispose()
+      expect(avatar.crossings.every((crossing) => crossing.copy.parent === null)).toBe(true)
+    }
   })
 })

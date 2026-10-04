@@ -3,6 +3,8 @@ import { frameFor } from '../engine/gravity'
 import { siteUniform } from '../engine/planet'
 import type { PlayerController } from '../engine/PlayerController'
 import { PORTAL_ONLY_LAYER } from '../engine/PortalRenderer'
+import { PortalItemView } from '../engine/PortalItemView'
+import type { Portal } from '../engine/Portal'
 import { palette } from '../world/materials'
 
 /*
@@ -93,10 +95,12 @@ export class Avatar {
   /* Left leaf, then right leaf. */
   readonly leaves: THREE.Mesh[] = []
   private readonly group = new THREE.Group()
+  readonly crossings: PortalItemView[] = []
 
   constructor(
     scene: THREE.Scene,
     private readonly player: PlayerController,
+    portals: readonly Portal[] = [],
   ) {
     this.body = new THREE.Mesh(new THREE.LatheGeometry(outline(), SIDES), paper(0xffffff))
     this.head = new THREE.Mesh(new THREE.SphereGeometry(HEAD_RADIUS, 48, 32), paper(palette.bone))
@@ -131,11 +135,24 @@ export class Avatar {
     for (const mesh of [this.head, this.stalk, ...this.leaves]) {
       mesh.layers.set(PORTAL_ONLY_LAYER)
     }
-    this.group.traverse((object) => {
-      const material = (object as THREE.Mesh).material as THREE.Material | undefined
-      if (material) this.sites.push(siteUniform(material))
-    })
+
     scene.add(this.group)
+
+    for (const mesh of [this.body, this.head, this.stalk, ...this.leaves]) {
+      if (portals.length > 0) {
+        mesh.geometry.computeBoundingSphere()
+        const crossing = new PortalItemView(
+          mesh,
+          mesh.material as THREE.MeshStandardMaterial,
+          mesh.geometry.boundingSphere!.radius,
+          portals,
+        )
+        this.crossings.push(crossing)
+      }
+
+      this.sites.push(siteUniform(mesh.material as THREE.Material))
+      mesh.userData.shadowCaster = true
+    }
   }
 
   /* Follow the player. */
@@ -151,5 +168,11 @@ export class Avatar {
     head.rotation.set(player.pitch, 0, 0)
     // Draw the figure at whichever site's map the player is on.
     for (const uniform of this.sites) uniform.value = player.site.motion
+    for (const crossing of this.crossings) crossing.update()
+  }
+
+  dispose() {
+    for (const crossing of this.crossings) crossing.dispose()
+    this.group.removeFromParent()
   }
 }

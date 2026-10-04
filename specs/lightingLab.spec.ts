@@ -14,7 +14,7 @@ function build(scene: LightingScene) {
 
   for (const portal of world.portals) portal.settle()
 
-  lab.update({ lampEnabled: true, referenceEnabled: false })
+  lab.update({ lampEnabled: true, lanternEnabled: false, referenceEnabled: false })
   return { world, lab }
 }
 
@@ -95,7 +95,7 @@ describe('Lighting lab isolation', () => {
       expect(lab.lamp.home.distanceTo(eye)).toBeLessThan(3)
 
       for (const item of world.items) {
-        if (item === lab.lamp) continue
+        if (item === lab.lamp || item === lab.lantern.lamp) continue
 
         expect(item.mesh.material).toBeInstanceOf(THREE.MeshStandardMaterial)
         const material = item.mesh.material as THREE.MeshStandardMaterial
@@ -108,12 +108,12 @@ describe('Lighting lab isolation', () => {
     const { lab } = build(lightingScenes[3])
     const radius = 96 / (2 * Math.PI)
     lab.lamp.mesh.position.set(24, 2, 0)
-    lab.update({ lampEnabled: true, referenceEnabled: false })
+    lab.update({ lampEnabled: true, lanternEnabled: false, referenceEnabled: false })
     expectAt(lab.light.position, radius + 2, -radius, 0)
 
     // Holding through a portal moves the displayed mesh before the body.
     lab.lamp.mesh.position.set(600, 1.3, 2)
-    lab.update({ lampEnabled: true, referenceEnabled: false })
+    lab.update({ lampEnabled: true, lanternEnabled: false, referenceEnabled: false })
     expectAt(lab.light.position, 600, 1.3, 2)
     expect(lab.lamp.body.position.x).toBe(0)
   })
@@ -124,11 +124,11 @@ describe('Lighting lab isolation', () => {
 
     if (!(reference instanceof THREE.DirectionalLight)) throw new Error('Missing reference light')
 
-    lab.update({ lampEnabled: false, referenceEnabled: true })
+    lab.update({ lampEnabled: false, lanternEnabled: false, referenceEnabled: true })
     expect(lab.light.intensity).toBe(0)
     expect(reference.intensity).toBeGreaterThan(0)
 
-    lab.update({ lampEnabled: true, referenceEnabled: false })
+    lab.update({ lampEnabled: true, lanternEnabled: false, referenceEnabled: false })
     expect(lab.light.intensity).toBeGreaterThan(0)
     expect(reference.intensity).toBe(0)
   })
