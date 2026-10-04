@@ -27,8 +27,8 @@
 Rules for placing structures on the planet
 
 - Give each structure a site, because one map of the whole planet squeezes whatever is far from its centre.
-- Keep each structure within 20 m of the middle of its site, because further out the site's own map starts to squeeze it.
-- Keep sites at least 50 m apart, because a wall is only solid to a player who is on the map of its site.
+- Keep each structure within 12 m of the middle of its site, because further out the site's own map starts to squeeze it.
+- Keep sites at least 40 m apart, because a wall is only solid to a player who is on the map of its site.
 - Keep a structure inside the half of the gap that is nearest its own site, because past the halfway line the player is on the next site's map and can walk through it.
-- Put the first ring of sites at least 80 m from the start, because the pillar ring is 30 m out and must stay inside the start's half of the gap.
+- Put sites at least 45 m from the start, because the pillar ring is 16 m out and must stay inside the start's half of the gap.
 - Mark anything that travels round the planet as rigid, because only its centre should go through the map and it must keep its own shape.

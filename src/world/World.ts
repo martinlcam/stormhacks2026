@@ -102,7 +102,7 @@ export interface Structure {
   /*
     Where on the planet the structure stands. Its coordinates are then on
     that site's own map, measured from the site's middle. Keep what is built
-    within about 20 m of the middle, and sites at least 50 m apart. Defaults
+    within about 12 m of the middle, and sites at least 40 m apart. Defaults
     to the pole.
   */
   site?: Site

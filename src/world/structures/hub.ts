@@ -3,10 +3,10 @@ import type { Structure } from '../World'
 import { createSky, glow, matte, palette, rockyGround } from '../materials'
 
 /*
-  Distance around the planet. Its radius is this / 2π, about 38 m, and the
+  Distance around the planet. Its radius is this / 2π, about 22 m, and the
   flat map of it is a disk of radius CIRCUMFERENCE / 2.
 */
-const CIRCUMFERENCE = 240
+const CIRCUMFERENCE = 140
 
 /*
   The whole ground as one disk on the flat map. The planet shader closes it
@@ -76,8 +76,8 @@ export const hub: Structure = {
     for (let i = 0; i < 12; i++) {
       const angle = (i / 12) * Math.PI * 2
       const height = 4 + (i % 3) * 2
-      const x = Math.round(Math.cos(angle) * 30)
-      const z = Math.round(Math.sin(angle) * 30)
+      const x = Math.round(Math.cos(angle) * 16)
+      const z = Math.round(Math.sin(angle) * 16)
       world.addBox({
         size: [1.2, height, 1.2],
         position: [x, height / 2, z],
