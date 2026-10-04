@@ -51,7 +51,7 @@ export function Onboarding() {
               learned[lesson] ? 'opacity-40' : ''
             }`}
           >
-            <span className="w-12 shrink-0 font-mono text-cyan">{keys}</span>
+            <span className="w-12 shrink-0 font-medium text-cyan">{keys}</span>
             <span className={learned[lesson] ? 'line-through' : ''}>{what}</span>
             {learned[lesson] && <span className="ml-auto text-cyan">✓</span>}
           </li>

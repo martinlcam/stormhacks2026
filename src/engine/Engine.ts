@@ -62,6 +62,11 @@ export class Engine {
     this.renderer.setAnimationLoop(() => this.frame())
   }
 
+  /* Stop drawing until `start` is called again, for a game built ahead of being shown. */
+  pause() {
+    this.renderer.setAnimationLoop(null)
+  }
+
   dispose() {
     this.running = false
     this.renderer.setAnimationLoop(null)

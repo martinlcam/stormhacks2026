@@ -18,11 +18,11 @@ export function FlagsPanel() {
   }
 
   return (
-    <div className="fixed top-3 left-3 z-50 w-80 rounded-xl bg-white/90 p-4 font-sans text-xs text-neutral-800 shadow-lg backdrop-blur">
+    <div className="fixed top-3 left-3 z-50 w-80 rounded-xl bg-white/90 p-4 text-xs text-neutral-800 shadow-lg backdrop-blur">
       <p className="mb-3 font-semibold tracking-wide uppercase">Flags</p>
       {names.map((name) => (
         <div key={name} className="mb-3">
-          <p className="font-mono">{name}</p>
+          <p className="font-semibold">{name}</p>
           <p className="mb-1 text-neutral-500">{FLAGS[name].about}</p>
           <div className="flex gap-1">
             {FLAGS[name].options.map((option) => (

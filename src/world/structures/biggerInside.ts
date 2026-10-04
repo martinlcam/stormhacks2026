@@ -4,6 +4,7 @@ import { PLANK_TILE, plankMaterial, woodMaterial } from '../foliage'
 import type { Structure } from '../World'
 import { glow, matte, palette } from '../materials'
 import { addBeacon, addRegion, addSocket, type PuzzleEvents, ramp, shine } from '../puzzle'
+import { FONT_STACK } from '../../font'
 
 /* Detached rooms live far from the hub so they are never seen directly. */
 const ROOM_X = 600
@@ -53,12 +54,12 @@ function blackboard(): THREE.Texture | null {
   }
   ctx.strokeStyle = ctx.fillStyle = 'rgba(240,240,230,0.9)'
   ctx.lineWidth = 3
-  ctx.font = '34px "Comic Sans MS", "Segoe Print", cursive'
+  ctx.font = `300 34px ${FONT_STACK}`
   ctx.fillText('Euclid, postulate 5:', 30, 50)
-  ctx.font = '26px "Comic Sans MS", "Segoe Print", cursive'
+  ctx.font = `300 26px ${FONT_STACK}`
   ctx.fillText('through a point not on a line', 30, 95)
   ctx.fillText('there is exactly one parallel.', 30, 130)
-  ctx.font = '40px "Comic Sans MS", "Segoe Print", cursive'
+  ctx.font = `300 40px ${FONT_STACK}`
   ctx.fillText('Always?', 60, 205)
   ctx.beginPath()
   ctx.ellipse(135, 192, 100, 34, -0.05, 0, Math.PI * 2)
@@ -71,7 +72,7 @@ function blackboard(): THREE.Texture | null {
   ctx.lineTo(540, 60)
   ctx.closePath()
   ctx.stroke()
-  ctx.font = '24px "Comic Sans MS", "Segoe Print", cursive'
+  ctx.font = `300 24px ${FONT_STACK}`
   ctx.fillText('a + b + c = 180°', 460, 238)
   ctx.beginPath()
   ctx.arc(860, 128, 105, 0, Math.PI * 2)

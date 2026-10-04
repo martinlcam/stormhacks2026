@@ -1,6 +1,8 @@
 @import 'tailwindcss';
 
 @theme {
+  /* The one typeface of the whole site, as on the landing page. Canvas text uses the same list, from `src/font.ts`. */
+  --font-sans: Helvetica, 'Helvetica Neue', Arial, sans-serif;
   --color-purple: #c252e1;
   --color-cyan: #6ecbf5;
   --color-night: #120a1c;

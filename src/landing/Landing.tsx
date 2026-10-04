@@ -12,7 +12,6 @@ import {
   CAPTION,
   CAPTION_INK,
   DROP_SPRITE,
-  FONT,
   LAST_CAPTION,
   PAGE_GRAIN,
   PROMPT,
@@ -158,7 +157,6 @@ export function Landing({ onEnter, onGone }: { onEnter: () => void; onGone: () =
     let drawn = -1
     let held = 0
     let release: (() => void) | null = null
-    let entered = false
     let gone = false
 
     const travel = () => track.scrollHeight - track.clientHeight
@@ -175,7 +173,9 @@ export function Landing({ onEnter, onGone }: { onEnter: () => void; onGone: () =
 
     for (const event of TAKE_OVER) track.addEventListener(event, takeOver, { passive: true })
     const enterKey = (event: KeyboardEvent) => {
-      if (event.key === 'Enter' && ready.current) leaving.current ??= performance.now() / 1000
+      if (event.key !== 'Enter' || !ready.current || leaving.current !== null) return
+      leaving.current = performance.now() / 1000
+      onEnter()
     }
 
     window.addEventListener('keydown', enterKey)
@@ -235,12 +235,6 @@ export function Landing({ onEnter, onGone }: { onEnter: () => void; onGone: () =
       drawn = p
 
       const leave = leftAt === null ? 0 : linear(0, LEAVE_SECONDS, seconds - leftAt)
-      // The click starts the game under the page, so that it is there when the water covers it.
-      if (leftAt !== null && !entered) {
-        entered = true
-        onEnter()
-      }
-
       // Once the water covers the page, the page fades and the game shows through the blue.
       const reveal =
         leftAt === null
@@ -345,7 +339,10 @@ export function Landing({ onEnter, onGone }: { onEnter: () => void; onGone: () =
 
   // Once "click to enter" shows, a click anywhere on the page goes into the game.
   const enter = () => {
-    if (ready.current) leaving.current ??= performance.now() / 1000
+    if (!ready.current || leaving.current !== null) return
+    leaving.current = performance.now() / 1000
+    // Inside the click itself, so that the game can capture the mouse with it.
+    onEnter()
   }
 
   const toggleSound = (event: MouseEvent) => {
@@ -367,7 +364,6 @@ export function Landing({ onEnter, onGone }: { onEnter: () => void; onGone: () =
           ref={stage}
           onClick={enter}
           className="sticky top-0 h-dvh overflow-hidden bg-white select-none"
-          style={{ fontFamily: FONT }}
         >
           {/* The title's canvas and paint, with the grain that comes in with the paint, and later the water. */}
           <canvas
@@ -464,7 +460,6 @@ export function Landing({ onEnter, onGone }: { onEnter: () => void; onGone: () =
                 top: percent(PROMPT.y, FRAME.h),
                 transform: 'translate(-50%, -50%)',
                 color: 'rgba(255,255,255,0.55)',
-                fontFamily: FONT,
                 fontWeight: 300,
                 letterSpacing: '-0.08em',
                 opacity: 0,
@@ -490,7 +485,7 @@ export function Landing({ onEnter, onGone }: { onEnter: () => void; onGone: () =
               type="button"
               onClick={toggleSound}
               className="absolute bottom-4 left-4 cursor-pointer rounded-full border-0 bg-white/70 px-3 py-1 text-xs tracking-[0.15em]"
-              style={{ color: CAPTION_INK, fontFamily: FONT }}
+              style={{ color: CAPTION_INK }}
             >
               {soundOn ? 'sound on' : 'sound off'}
             </button>
