@@ -37,6 +37,13 @@ export const discoveries = {
     maths:
       'Being scaled by a quarter is indistinguishable from the world being scaled by four. Lengths only ever mean something relative to a ruler, and here the ruler is you.',
   },
+  'thrown-through': {
+    id: 'thrown-through',
+    title: 'What goes in comes out',
+    body: 'The gem went in one door and came out of the other, still travelling the same way.',
+    maths:
+      'A doorway is a single rigid motion, and it is applied to where a thing is and to how it is moving alike. Seen from the door, nothing about the throw changed.',
+  },
 } satisfies Record<string, Discovery>
 
 export type DiscoveryId = keyof typeof discoveries

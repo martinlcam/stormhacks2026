@@ -68,6 +68,8 @@ export function biggerInside(onEnter: () => void): Structure {
         core.position.y = 2.2 + Math.sin(time * 1.2) * 0.25
       })
 
+      world.addItem({ position: [HALL_X + 2, 0.18, 6], material: glow(palette.cyan, 1.2) })
+
       const inside = world.addDoor({
         name: 'hall',
         position: [HALL_X, 0, 9.9],

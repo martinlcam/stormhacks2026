@@ -51,6 +51,10 @@ function StartScreen({ onPlay }: { onPlay: () => void }) {
         <dd>run</dd>
         <dt className="font-mono text-cyan">Space</dt>
         <dd>jump</dd>
+        <dt className="font-mono text-cyan">E</dt>
+        <dd>pick up / put down</dd>
+        <dt className="font-mono text-cyan">Click</dt>
+        <dd>throw</dd>
         <dt className="font-mono text-cyan">Esc</dt>
         <dd>release mouse</dd>
       </dl>

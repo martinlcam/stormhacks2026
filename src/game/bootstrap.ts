@@ -4,6 +4,7 @@ import { biggerInside } from '../world/structures/biggerInside'
 import { hub } from '../world/structures/hub'
 import { loopCorridor } from '../world/structures/loopCorridor'
 import { resizingDoors } from '../world/structures/resizingDoors'
+import { ItemSystem } from './items'
 import { useGame } from './store'
 
 /*
@@ -32,12 +33,21 @@ export function bootstrap(canvas: HTMLCanvasElement): () => void {
   engine.player.respawn()
   engine.player.onLockChange = (locked) => game.setPlaying(locked)
   engine.onStats = ({ fps, passes, scale }) => game.setStats(fps, passes, scale)
+
+  const items = new ItemSystem(engine, {
+    prompt: (text) => game.setPrompt(text),
+    thrownThrough: () => game.discover('thrown-through'),
+  })
+  world.onUpdate((dt) => items.update(dt))
   engine.start()
 
   if (import.meta.env.DEV) {
     // Handy in the console: __engine.player.position.set(...)
-    Object.assign(window, { __engine: engine })
+    Object.assign(window, { __engine: engine, __items: items })
   }
 
-  return () => engine.dispose()
+  return () => {
+    items.dispose()
+    engine.dispose()
+  }
 }

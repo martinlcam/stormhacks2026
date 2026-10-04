@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { Body } from '../engine/Body'
 import { Portal } from '../engine/Portal'
 
 type Vec3 = readonly [number, number, number]
@@ -30,6 +31,20 @@ export interface DoorOptions {
   backing?: THREE.Material
 }
 
+export interface ItemOptions {
+  /* Where the item starts, and returns to if it is lost. Centre of the item. */
+  position: Vec3
+  radius?: number
+  material: THREE.Material
+}
+
+/* Something the player can pick up, carry and throw. */
+export interface Item {
+  body: Body
+  mesh: THREE.Mesh
+  home: THREE.Vector3
+}
+
 /* A self-contained piece of the sandbox. One file per impossible structure. */
 export interface Structure {
   name: string
@@ -47,6 +62,7 @@ export class World {
   readonly scene = new THREE.Scene()
   readonly colliders: THREE.Box3[] = []
   readonly portals: Portal[] = []
+  readonly items: Item[] = []
   /*
     Circumference of the planet that the plaza around the origin is drawn
     as, or null for a flat world.
@@ -67,6 +83,19 @@ export class World {
     this.scene.add(mesh)
     if (collide) this.colliders.push(new THREE.Box3().setFromObject(mesh))
     return mesh
+  }
+
+  /* A gem the player can pick up. It collides and rolls as a ball. */
+  addItem({ position, radius = 0.18, material }: ItemOptions): Item {
+    const mesh = new THREE.Mesh(new THREE.IcosahedronGeometry(radius, 0), material)
+    mesh.frustumCulled = false
+    this.scene.add(mesh)
+    const body = new Body(radius)
+    body.position.set(...position)
+    mesh.position.copy(body.position)
+    const item = { body, mesh, home: body.position.clone() }
+    this.items.push(item)
+    return item
   }
 
   /* Something solid with nothing to draw. */

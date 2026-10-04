@@ -106,6 +106,21 @@ export class PlayerController {
     if (this.position.y < -40) this.respawn()
   }
 
+  /* Where the eye is, in map coordinates. */
+  eye(target: THREE.Vector3) {
+    return target.copy(this.position).setY(this.position.y + EYE_HEIGHT * this.scale)
+  }
+
+  /* The direction the player is looking, in map coordinates. */
+  look(target: THREE.Vector3) {
+    const level = Math.cos(this.pitch)
+    return target.set(
+      -Math.sin(this.yaw) * level,
+      Math.sin(this.pitch),
+      -Math.cos(this.yaw) * level,
+    )
+  }
+
   applyTo(camera: THREE.PerspectiveCamera) {
     const eye = EYE_HEIGHT * this.scale
     if (onPlanet(this.position)) {

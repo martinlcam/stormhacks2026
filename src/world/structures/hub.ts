@@ -71,6 +71,11 @@ export const hub: Structure = {
     // On the map the ground is a flat slab under the whole disk.
     world.addCollider([-reach - 12, -1, -reach - 12], [reach + 12, 0, reach + 12])
 
+    // Gems to carry and throw, set out around the spawn point.
+    world.addItem({ position: [1.5, 0.18, -0.5], material: glow(palette.cyan, 1.2) })
+    world.addItem({ position: [-1.5, 0.18, -0.5], material: glow(palette.purple, 1.2) })
+    world.addItem({ position: [-11, 0.18, -3], material: glow(palette.bone, 0.9) })
+
     // Landmarks: without fixed reference points you cannot tell that space
     // has been stitched together wrongly.
     const colours = [palette.purple, palette.cyan]

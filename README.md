@@ -11,13 +11,12 @@
 - Add a 4D sculpture that turns in the plaza.
 - Build the endless stairwell.
 - Build the pillar that the player must go around two times.
-- Add items that the player can pick up, hold and put down.
-- Make the interaction ray continue through portals.
 - Add the gyroscope arrow that shows the rotation after a loop.
 - Add the chalk line that draws straight paths and shows the angle sum of a triangle.
 - Add forced perspective: an object that is put down becomes as large as it looks.
 - Add alignment puzzles: the parts make a shape from one position only.
-- Let objects go through portals without the player.
+- Draw an item on both sides of a portal while it is part of the way through.
+- Make items collide with each other and with the player.
 - Draw each portal view only in the screen rectangle of the portal.
 - Remove the short stop when the player goes through a portal.
 - Bend the surface normals so that the light agrees with the curved ground.
