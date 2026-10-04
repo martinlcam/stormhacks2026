@@ -43,8 +43,6 @@ const ITEM_GRAIN = 0.035
 /* How strongly the paper's grain shows over the picture, and the average brightness of its image. */
 const PAPER = 0.5
 const PAPER_GREY = 0.567
-/* How many pixels across the image of the paper is. It is laid over the screen at that size. */
-const PAPER_SIZE = 1080
 
 /* The middle of each colour's share of the hues, and half its width. */
 export const BANDS = RAINBOW.map(([, from], i) => {
@@ -63,6 +61,8 @@ export const filmUniforms = {
   uFilmFrame: { value: 0 },
   /* How many pixels of the canvas one speck of grain covers. */
   uFilmSpeck: { value: 1 },
+  /* The size of the canvas in its own pixels, which the sheet of paper is laid over. */
+  uFilmScreen: { value: new THREE.Vector2(1, 1) },
   /* The grain of the paper the landing page is painted on, and 1 once it has loaded. */
   uFilmPaper: { value: null as THREE.Texture | null },
   uFilmPapered: { value: 0 },
@@ -72,15 +72,14 @@ export const filmUniforms = {
 
 /*
   Fetch the paper's grain. Until it arrives, and where there is no browser,
-  the picture is drawn without it.
+  the picture is drawn without it. Its edges are clamped, not repeated: the
+  image is lit unevenly and does not tile, so it must never meet itself.
 */
 export function loadPaper() {
   if (filmUniforms.uFilmPaper.value || typeof document === 'undefined') return
   filmUniforms.uFilmPaper.value = new THREE.TextureLoader().load(
     `${import.meta.env.BASE_URL}landing/grain.jpg`,
-    (paper) => {
-      paper.wrapS = paper.wrapT = THREE.RepeatWrapping
-      paper.needsUpdate = true
+    () => {
       filmUniforms.uFilmPapered.value = 1
     },
   )
@@ -156,6 +155,7 @@ uniform float uFilmColours[${RAINBOW.length}];
 uniform float uFilmGrain;
 uniform float uFilmFrame;
 uniform float uFilmSpeck;
+uniform vec2 uFilmScreen;
 uniform sampler2D uFilmPaper;
 uniform float uFilmPapered;
 uniform float uFilmKeep;
@@ -187,9 +187,11 @@ ${BANDS.map(
   return mix(vec3(grey), c, clamp(max(keep, uFilmKeep), 0.0, 1.0));
 }
 
-// The paper's grain, laid over the screen: lighter and darker by the paper's own texture.
+// The paper's grain: lighter and darker by the paper's own texture. It is one sheet over the
+// whole screen, as large as covers it and centred, as on the landing page, so it has no seams.
 vec3 filmPaper(vec3 c) {
-  float paper = texture2D(uFilmPaper, gl_FragCoord.xy / (${PAPER_SIZE}.0 * uFilmSpeck)).g;
+  vec2 at = (gl_FragCoord.xy - 0.5 * uFilmScreen) / max(uFilmScreen.x, uFilmScreen.y) + 0.5;
+  float paper = texture2D(uFilmPaper, at).g;
   return c * (1.0 + (paper - ${PAPER_GREY}) * ${PAPER} * uFilmPapered * uFilmGrain);
 }
 
