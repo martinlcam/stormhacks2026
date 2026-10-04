@@ -20,6 +20,11 @@ import * as THREE from 'three'
   lengths by sin θ / θ. Structures stand near the origin, where that factor
   is close to 1.
 
+  Things that travel all the way round, the player's figure and whatever
+  they carry or throw, would be squeezed flat on the far side. Those are
+  marked rigid (`material.userData.rigid`): only the object's centre goes
+  through the map, and the object keeps its own shape about that point.
+
   The player walks on the sphere itself: each step is a rotation about the
   sphere's centre, a great-circle arc, and their heading is carried along
   by the same rotation. Any straight walk therefore returns to its start
@@ -69,6 +74,20 @@ vec3 ontoPlanet(vec3 p, vec3 objectCentre) {
   float r = 1.0 / uPlanetK + p.y;
   return vec3(p.x / d * r * sin(theta), r * cos(theta) - 1.0 / uPlanetK, p.z / d * r * sin(theta));
 }
+
+vec3 ontoPlanetRigid(vec3 p, vec3 c) {
+  if (uPlanetK == 0.0 || length(c.xz) > uPlanetReach) return p;
+  float d = length(c.xz);
+  vec2 outward = d < 1e-5 ? vec2(1.0, 0.0) : c.xz / d;
+  float theta = d * uPlanetK;
+  float radius = 1.0 / uPlanetK;
+  vec3 up = vec3(outward.x * sin(theta), cos(theta), outward.y * sin(theta));
+  vec3 out_ = vec3(outward.x * cos(theta), -sin(theta), outward.y * cos(theta));
+  vec3 around = vec3(-outward.y, 0.0, outward.x);
+  vec3 o = p - c;
+  return up * (radius + c.y + o.y) - vec3(0.0, radius, 0.0)
+    + out_ * dot(o.xz, outward) + around * dot(o.xz, vec2(-outward.y, outward.x));
+}
 `
 
 const PROJECT = /* glsl */ `
@@ -77,7 +96,11 @@ vec4 mvPosition = vec4(transformed, 1.0);
   mvPosition = instanceMatrix * mvPosition;
 #endif
 vec4 planetPosition = modelMatrix * mvPosition;
-planetPosition.xyz = ontoPlanet(planetPosition.xyz, modelMatrix[3].xyz);
+#ifdef PLANET_RIGID
+  planetPosition.xyz = ontoPlanetRigid(planetPosition.xyz, modelMatrix[3].xyz);
+#else
+  planetPosition.xyz = ontoPlanet(planetPosition.xyz, modelMatrix[3].xyz);
+#endif
 mvPosition = viewMatrix * planetPosition;
 gl_Position = projectionMatrix * mvPosition;
 `
@@ -86,6 +109,7 @@ gl_Position = projectionMatrix * mvPosition;
 export function planetMaterial(material: THREE.Material) {
   if (material.userData.planet || (material as THREE.ShaderMaterial).isShaderMaterial) return
   material.userData.planet = true
+  if (material.userData.rigid) (material.defines ??= {}).PLANET_RIGID = ''
   // A material may already change its own shader; keep that.
   const before = material.onBeforeCompile
   const key = material.customProgramCacheKey()

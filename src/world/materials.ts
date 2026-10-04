@@ -56,6 +56,10 @@ function groundTexture(file: string, metres: number, colour: boolean): THREE.Tex
 
   Near the eye the close view shades the aerial one. Far away, where its
   small tiles would show as a pattern, it fades out.
+
+  The images are not laid on the flat map, which pinches to a point on the
+  far side of the planet. They are projected onto the sphere itself along
+  the three axes and blended, so the ground looks the same all the way round.
 */
 export function rockyGround(): THREE.MeshStandardMaterial {
   const metres = 24
@@ -68,25 +72,77 @@ export function rockyGround(): THREE.MeshStandardMaterial {
   })
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uClose = { value: close }
-    shader.uniforms.uCloseScale = { value: metres / closeMetres }
+    shader.uniforms.uFar = { value: 1 / metres }
+    shader.uniforms.uNear = { value: 1 / closeMetres }
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vGround;')
+      // `planetPosition` is where the planet shader puts the vertex in space.
+      .replace(
+        '#include <project_vertex>',
+        '#include <project_vertex>\nvGround = planetPosition.xyz;',
+      )
     shader.fragmentShader = shader.fragmentShader
       .replace(
         '#include <common>',
         /* glsl */ `#include <common>
         uniform sampler2D uClose;
-        uniform float uCloseScale;`,
+        uniform float uFar;
+        uniform float uNear;
+        uniform float uPlanetK;
+        varying vec3 vGround;
+        // Turn a direction at a place on the sphere, where up is \`up\`, to the
+        // same direction on flat ground, where up is +y.
+        vec3 flatways(vec3 v, vec3 up) {
+          vec3 axis = cross(up, vec3(0.0, 1.0, 0.0));
+          return v + cross(axis, v) + cross(axis, cross(axis, v)) / max(1.0 + up.y, 1e-3);
+        }
+        // One image seen along each axis, blended by which way the ground faces.
+        vec4 alongAxes(sampler2D image, vec3 p, vec3 weight, float bias) {
+          return texture2D(image, p.zy, bias) * weight.x
+            + texture2D(image, p.xz, bias) * weight.y
+            + texture2D(image, p.xy, bias) * weight.z;
+        }`,
       )
       .replace(
         '#include <map_fragment>',
-        /* glsl */ `#include <map_fragment>
+        /* glsl */ `
+        // From the planet's centre.
+        vec3 ground = vGround + vec3(0.0, 1.0 / uPlanetK, 0.0);
+        vec3 groundUp = normalize(ground);
+        vec3 weight = pow(abs(groundUp), vec3(4.0));
+        weight /= weight.x + weight.y + weight.z;
+        diffuseColor *= alongAxes(map, ground * uFar, weight, 0.0);
         {
-          vec2 closeUv = vMapUv * uCloseScale;
-          vec3 detail = texture2D(uClose, closeUv).rgb;
+          vec3 detail = alongAxes(uClose, ground * uNear, weight, 0.0).rgb;
           // The smallest copy of the image is its average colour.
-          vec3 average = texture2D(uClose, closeUv, 16.0).rgb;
+          vec3 average = texture2D(uClose, vec2(0.0), 16.0).rgb;
           float near = 1.0 - smoothstep(10.0, 45.0, length(vViewPosition));
           diffuseColor.rgb *= mix(vec3(1.0), detail / average, near);
         }`,
+      )
+      .replace(
+        '#include <normal_fragment_maps>',
+        /* glsl */ `
+        {
+          vec3 p = ground * uNear;
+          vec3 x = texture2D(normalMap, p.zy).xyz * 2.0 - 1.0;
+          vec3 y = texture2D(normalMap, p.xz).xyz * 2.0 - 1.0;
+          vec3 z = texture2D(normalMap, p.xy).xyz * 2.0 - 1.0;
+          vec3 bump = weight.x * vec3(0.0, x.y, x.x)
+            + weight.y * vec3(y.x, 0.0, y.y)
+            + weight.z * vec3(z.x, z.y, 0.0);
+          // The ground is lit as if it were flat, so that no side of the
+          // planet is in night.
+          normal = normalize(mat3(viewMatrix) * normalize(vec3(0.0, 1.0, 0.0) + flatways(bump, groundUp) * normalScale.x));
+        }`,
+      )
+      .replace(
+        '#include <lights_fragment_begin>',
+        // The eye must be turned the same way, or the far side shines as if seen from below.
+        THREE.ShaderChunk.lights_fragment_begin.replace(
+          'normalize( vViewPosition )',
+          'normalize(mat3(viewMatrix) * flatways(cameraPosition - vGround, groundUp))',
+        ),
       )
   }
   material.customProgramCacheKey = () => 'ground'

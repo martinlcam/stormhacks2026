@@ -36,12 +36,15 @@ const UP = new THREE.Vector3(0, 1, 0)
   colour so the figure stays light in the plaza's dim violet light.
 */
 function paper(color: number): THREE.MeshStandardMaterial {
-  return new THREE.MeshStandardMaterial({
+  const material = new THREE.MeshStandardMaterial({
     color,
     emissive: color,
     emissiveIntensity: 0.45,
     roughness: 1,
   })
+  // The figure walks right round the planet; it keeps its shape there.
+  material.userData.rigid = true
+  return material
 }
 
 /* How far the centre of the slot's ball is above the rim. */

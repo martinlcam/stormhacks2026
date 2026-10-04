@@ -138,6 +138,8 @@ export class World {
   /* A gem the player can pick up. It collides and rolls as a ball. */
   addItem({ position, radius = 0.18, material }: ItemOptions): Item {
     const mesh = new THREE.Mesh(new THREE.IcosahedronGeometry(radius, 0), material)
+    // An item can be carried right round the planet; it keeps its shape there.
+    material.userData.rigid = true
     mesh.frustumCulled = false
     this.scene.add(mesh)
     const body = new Body(radius)
