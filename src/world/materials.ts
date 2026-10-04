@@ -44,18 +44,53 @@ function groundTexture(file: string, metres: number, colour: boolean): THREE.Tex
 }
 
 /*
-  Rocky ground: "Rocky Terrain 02" by Amal Kumar, from Poly Haven
-  (polyhaven.com/a/rocky_terrain_02), released under CC0. The image is an
-  aerial view 90 m across. It is laid much smaller than that here, so that
-  there is detail underfoot on a planet only 240 m round.
+  The ground, from two Poly Haven images, both CC0:
+
+    "Rocky Terrain 02" by Amal Kumar (polyhaven.com/a/rocky_terrain_02), an
+    aerial view 90 m across, laid much smaller here. It gives the ground
+    its colour and its patches of rock.
+
+    "Forrest Ground 01" by Rob Tuytel (polyhaven.com/a/forrest_ground_01),
+    a close view 2 m across. It gives the grass, twigs and grit underfoot,
+    which the aerial view is far too coarse to show.
+
+  Near the eye the close view shades the aerial one. Far away, where its
+  small tiles would show as a pattern, it fades out.
 */
 export function rockyGround(): THREE.MeshStandardMaterial {
   const metres = 24
-  return new THREE.MeshStandardMaterial({
+  const closeMetres = 2.5
+  const close = groundTexture('forrest_ground_01/diffuse.jpg', closeMetres, true)
+  const material = new THREE.MeshStandardMaterial({
     map: groundTexture('rocky_terrain_02/diffuse.jpg', metres, true),
-    normalMap: groundTexture('rocky_terrain_02/normal.jpg', metres, false),
+    normalMap: groundTexture('forrest_ground_01/normal.jpg', closeMetres, false),
     roughness: 0.95,
   })
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.uClose = { value: close }
+    shader.uniforms.uCloseScale = { value: metres / closeMetres }
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        '#include <common>',
+        /* glsl */ `#include <common>
+        uniform sampler2D uClose;
+        uniform float uCloseScale;`,
+      )
+      .replace(
+        '#include <map_fragment>',
+        /* glsl */ `#include <map_fragment>
+        {
+          vec2 closeUv = vMapUv * uCloseScale;
+          vec3 detail = texture2D(uClose, closeUv).rgb;
+          // The smallest copy of the image is its average colour.
+          vec3 average = texture2D(uClose, closeUv, 16.0).rgb;
+          float near = 1.0 - smoothstep(10.0, 45.0, length(vViewPosition));
+          diffuseColor.rgb *= mix(vec3(1.0), detail / average, near);
+        }`,
+      )
+  }
+  material.customProgramCacheKey = () => 'ground'
+  return material
 }
 
 export function matte(color: number): THREE.MeshStandardMaterial {

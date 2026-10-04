@@ -86,13 +86,17 @@ gl_Position = projectionMatrix * mvPosition;
 export function planetMaterial(material: THREE.Material) {
   if (material.userData.planet || (material as THREE.ShaderMaterial).isShaderMaterial) return
   material.userData.planet = true
-  material.onBeforeCompile = (shader) => {
+  // A material may already change its own shader; keep that.
+  const before = material.onBeforeCompile
+  const key = material.customProgramCacheKey()
+  material.onBeforeCompile = (shader, renderer) => {
+    before.call(material, shader, renderer)
     Object.assign(shader.uniforms, planetUniforms)
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', `#include <common>\n${PARS}`)
       .replace('#include <project_vertex>', PROJECT)
   }
-  material.customProgramCacheKey = () => 'planet'
+  material.customProgramCacheKey = () => `planet/${key}`
 }
 
 /*
