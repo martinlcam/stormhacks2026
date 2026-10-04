@@ -96,7 +96,6 @@ function Ending({ phase, onContinue }: { phase: EndingPhase; onContinue: () => v
       <div
         className={`relative flex h-full flex-col items-center justify-center gap-5 overflow-y-auto px-4 py-8 font-light text-caption transition-all duration-1000 ${shown ? 'pointer-events-auto translate-y-0 opacity-100' : 'translate-y-3 opacity-0'}`}
       >
-        <h1 className="m-0 text-6xl font-bold tracking-[-0.08em] text-ink">WÚ 無</h1>
         <p className="m-0 text-2xl tracking-[-0.05em]">nothing left to find.</p>
         <p className="m-0 text-sm tracking-[-0.02em] tabular-nums">
           {found.length} / {TOTAL} points
@@ -252,8 +251,7 @@ function StartScreen({ onPlay }: { onPlay: () => void }) {
       <div className="relative w-[min(30rem,100%)] px-14 pt-12 pb-14 text-left font-light text-caption">
         <Wash rough={34} seed={2} radius={40} blooms={['green', 'blue']} />
         <div className="relative">
-          <h1 className="m-0 text-5xl font-bold tracking-[-0.08em] text-ink">WÚ 無</h1>
-          <p className="mt-2 mb-0 text-lg tracking-[-0.04em]">click to enter</p>
+          <p className="m-0 text-lg tracking-[-0.04em]">click to enter</p>
           <p className="mt-4 mb-0 text-sm leading-relaxed tracking-[-0.02em]">
             you start holding the amber lamp. carry its light through the doorways, press E to put
             it down, or hold Q to throw it. there’s also a Minecraft lantern on the ground to your
