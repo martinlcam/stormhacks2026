@@ -171,13 +171,61 @@ export function gravityRoom(
       // Every door stands 10 cm off the surface behind it, which is its backing.
       const gap = 0.1
 
-      // In from the plaza.
+      // In from the plaza: the front door of a small house, with lit windows
+      // in its side walls, a roof and a chimney.
+      const [doorX, doorZ] = [-5, 9]
       const outside = world.addDoor({
         name: 'gravity-outside',
-        position: [-5, 0, 9],
+        position: [doorX, 0, doorZ],
         facing: 2,
         overgrown: true,
-        backing: matte(palette.stone),
+      })
+      const wide = 3.2
+      const deep = 2.8
+      const tall = 2.7
+      // Its front wall is just behind the door's frame.
+      const middle = doorZ + 0.16 + deep / 2
+      world.addBox({
+        size: [wide, tall, deep],
+        position: [doorX, tall / 2, middle],
+        overgrown: true,
+      })
+      world.addRoof([doorX, middle], tall, wide, deep)
+      world.addBox({
+        size: [0.45, 1.1, 0.45],
+        position: [doorX + 0.9, tall + 0.55, middle + 0.6],
+        material: matte(palette.stone),
+      })
+      // A window in each side wall and one beside the door: a lit pane with a sill under it.
+      const pane = glow(ramp(WARM, 0), 1.1)
+      const sill = matte(palette.stone)
+      for (const side of [-1, 1]) {
+        const wallX = doorX + side * (wide / 2 + 0.02)
+        world.addBox({
+          size: [0.04, 0.8, 0.9],
+          position: [wallX, 1.5, middle],
+          material: pane,
+          collide: false,
+        })
+        world.addBox({
+          size: [0.12, 0.08, 1.1],
+          position: [wallX, 1.06, middle],
+          material: sill,
+          collide: false,
+        })
+      }
+      const front = doorZ + 0.14
+      world.addBox({
+        size: [0.6, 0.7, 0.04],
+        position: [doorX + 1.15, 1.55, front],
+        material: pane,
+        collide: false,
+      })
+      world.addBox({
+        size: [0.8, 0.08, 0.12],
+        position: [doorX + 1.15, 1.16, front],
+        material: sill,
+        collide: false,
       })
       const entrance = world.addDoor({
         name: 'gravity-entrance',

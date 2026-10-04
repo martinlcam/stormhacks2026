@@ -189,14 +189,44 @@ export function stairwell(
         tell()
       })
 
-      // The way in: a door in the plaza and one on the first landing.
+      // The way in: a door in the plaza and one on the first landing. The
+      // door in the plaza is the front door of a narrow house, two storeys
+      // and a roof, far too small for what is inside.
+      const [doorX, doorZ] = [-9, 3]
       const outside = world.addDoor({
         name: 'stairwell-plaza',
-        position: [-9, 0, 3],
+        position: [doorX, 0, doorZ],
         facing: 1,
         overgrown: true,
-        backing: plankMaterial(),
       })
+      const houseWide = 2.4
+      const houseTall = 4.6
+      // Its front wall is just behind the door's frame.
+      const houseX = doorX - 0.16 - houseWide / 2
+      world.addBox({
+        size: [houseWide, houseTall, houseWide],
+        position: [houseX, houseTall / 2, doorZ],
+        overgrown: true,
+      })
+      world.addRoof([houseX, doorZ], houseTall, houseWide, houseWide)
+      // Lit windows: one over the door, and one on each floor of both side walls.
+      const pane = glow(ICE[0], 1)
+      world.addBox({
+        size: [0.04, 0.8, 0.7],
+        position: [doorX - 0.14, 3.4, doorZ],
+        material: pane,
+        collide: false,
+      })
+      for (const side of [-1, 1]) {
+        for (const y of [1.5, 3.4]) {
+          world.addBox({
+            size: [0.7, 0.8, 0.04],
+            position: [houseX, y, doorZ + side * (houseWide / 2 + 0.02)],
+            material: pane,
+            collide: false,
+          })
+        }
+      }
       const inside = world.addDoor({
         name: 'stairwell-landing',
         position: [X + corners[0][0], 0, HALF - 0.16],
