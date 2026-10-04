@@ -5,22 +5,21 @@ import { PORTAL_ONLY_LAYER } from '../engine/PortalRenderer'
 import { palette } from '../world/materials'
 
 /*
-  All lengths are for a player of scale 1, feet at the origin. They follow
-  the player's collision shape: 0.3 m in radius at the ground, 1.8 m tall,
-  with the eye at the middle of the head.
+  All lengths are for a player of scale 1, feet at the origin. The figure is
+  squat: as wide at the ground as the player's collision shape, only a
+  little narrower at the top, and about half the player's height.
 */
 const BASE_RADIUS = 0.3
-const RIM_RADIUS = 0.14
-const RIM_HEIGHT = 1.48
-const HEAD_RADIUS = 0.17
+const RIM_RADIUS = 0.24
+const RIM_HEIGHT = 0.62
+const HEAD_RADIUS = 0.22
 /* The slot is a bowl cut from a slightly larger ball, so the head sits in it with a gap. */
-const SLOT_RADIUS = 0.185
+const SLOT_RADIUS = 0.25
 /* How many flat faces go round the body, and how many steps the bowl is cut in. */
 const SIDES = 20
 const SLOT_STEPS = 5
 
 const turn = new THREE.Quaternion()
-const roll = new THREE.Vector3()
 const UP = new THREE.Vector3(0, 1, 0)
 
 /*
@@ -59,14 +58,17 @@ function outline(): THREE.Vector2[] {
 }
 
 /*
-  The player's own body: a tapering cylinder, flat on the bottom and narrower
-  towards the top, with a bowl-shaped slot in the top and a ball resting in
-  the slot for a head. There are no arms or legs.
+  The player's own body: a short, wide cylinder, flat on the bottom and a
+  little narrower towards the top, with a bowl-shaped slot in the top and a
+  ball held in the slot for a head. There are no arms or legs.
+
+  The head is fixed in its slot. It turns only as the player looks: left and
+  right with the body, up and down with the view.
 
   The game stays first person. The body is drawn where the player stands, so
-  they see the rim and the slot when they look down, and the whole figure
-  when a doorway shows them themselves. The eye is inside the head, so the
-  head is only drawn in views through portals.
+  they see it when they look down, and the whole figure when a doorway shows
+  them themselves. The head is only drawn in views through portals, so the
+  player never looks down on the top of their own head.
 */
 export class Avatar {
   readonly body: THREE.Mesh
@@ -91,7 +93,7 @@ export class Avatar {
   }
 
   /* Follow the player. */
-  update(dt: number) {
+  update() {
     const { player, group, head } = this
     group.position.copy(player.position)
     // Stand on whatever surface the player stands on, turned to face their way.
@@ -99,16 +101,7 @@ export class Avatar {
       .setFromRotationMatrix(frameFor(player.axis))
       .multiply(turn.setFromAxisAngle(UP, player.yaw))
     group.scale.setScalar(player.scale)
-    group.updateMatrixWorld(true)
-
-    // The head is loose in its slot, so it rolls like a ball as the body moves.
-    const rising = player.velocity.dot(player.up)
-    roll.copy(player.velocity).addScaledVector(player.up, -rising)
-    const speed = roll.length()
-    if (speed > 1e-4) {
-      roll.crossVectors(player.up, roll).normalize()
-      group.worldToLocal(roll.add(group.position)).normalize()
-      head.rotateOnWorldAxis(roll, (speed * dt) / (HEAD_RADIUS * player.scale))
-    }
+    // The body has already turned left or right; the head adds looking up or down.
+    head.rotation.set(player.pitch, 0, 0)
   }
 }
