@@ -7,9 +7,9 @@
 
 ## Lighting in the full world
 
-Open `/#play` or enter from the landing page. Pick up the amber lamp on the
-pedestal ahead and to the right of spawn with **E**, then carry or throw it
-through the world. It illuminates the ground, objects, and spaces visible through
+Open `/#play` or enter from the landing page. You start holding the amber lamp,
+already lit. Press **E** to put it down or pick it up again, or hold **Q** to throw
+it through the world. It illuminates the ground, objects, and spaces visible through
 doorways. Its position follows the planet's regions; resizing doors scale its
 range and strength along with the lamp, and a lamp halfway through a doorway
 illuminates both sides. The lab and full world use the same lamp implementation.

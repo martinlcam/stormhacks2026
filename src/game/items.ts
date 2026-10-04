@@ -192,9 +192,12 @@ export class ItemSystem {
   private readonly abort = new AbortController()
 
   constructor(
-    private readonly engine: Engine,
+    private readonly engine: Pick<Engine, 'world' | 'player'>,
     private readonly events: ItemEvents,
+    startingItem?: Item,
   ) {
+    if (startingItem) this.pickUp(startingItem)
+
     for (const item of engine.world.items) {
       item.body.onTraverse = () => events.thrownThrough()
     }
@@ -232,10 +235,14 @@ export class ItemSystem {
       this.cancelCharge()
       this.release(0)
     } else if (this.target) {
-      this.held = this.target
-      this.held.body.resting = true
-      this.held.body.velocity.set(0, 0, 0)
+      this.pickUp(this.target)
     }
+  }
+
+  private pickUp(item: Item) {
+    this.held = item
+    item.body.resting = true
+    item.body.velocity.set(0, 0, 0)
   }
 
   /* Q pressed: start winding up a throw. */

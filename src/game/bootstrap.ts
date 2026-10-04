@@ -62,13 +62,17 @@ export function bootstrap(
   const lights = lightingLab?.lights ?? worldLamp!.lights
   engine.portalRenderer.portalLighting = new PortalLighting(lights, world.portals)
 
-  const items = new ItemSystem(engine, {
-    prompt: (text) => game.setPrompt(text),
-    charge: (level) => game.setCharge(level),
-    thrownThrough: () => {
-      if (!lightingScene) game.discover('thrown-through')
+  const items = new ItemSystem(
+    engine,
+    {
+      prompt: (text) => game.setPrompt(text),
+      charge: (level) => game.setCharge(level),
+      thrownThrough: () => {
+        if (!lightingScene) game.discover('thrown-through')
+      },
     },
-  })
+    worldLamp?.lamp,
+  )
   const avatar = new Avatar(world.scene, engine.player)
   world.onUpdate((dt) => {
     items.update(dt)
