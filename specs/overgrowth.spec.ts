@@ -19,7 +19,7 @@ function leaves(doorway = door): THREE.Vector3[] {
 }
 
 const count = (points: THREE.Vector3[], where: (p: THREE.Vector3) => boolean) =>
-  points.filter(where).length / 3 / 6
+  points.filter(where).length / 3 / 2
 
 describe('Feature: an old doorway is overgrown', () => {
   const all = leaves()

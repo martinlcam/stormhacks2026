@@ -10,8 +10,9 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
     wood     "Rough Wood" texture, Poly Haven, CC0 (Rob Tuytel)
     ferns    "Fern 02" model, Poly Haven, CC0 (Rob Tuytel, Rico Cilliers)
     sorrel   "Shrub Sorrel 01" model, Poly Haven, CC0 (Rico Cilliers)
-    ivy      made here: stems that climb the posts, run along the top and
-             hang down into the opening, with a leaf every few centimetres
+    ivy      photographed leaves from "Leaf Set 017", ambientCG, CC0, set
+             on stems that are grown here: up the posts, along the top and
+             hanging down into the opening
 
   The files are in public/textures and public/models.
 */
@@ -72,32 +73,37 @@ function seeded(text: string): () => number {
   }
 }
 
-const LEAF_GREENS = [0x2f6b2a, 0x3f8a33, 0x57a53c, 0x79c24e, 0x4a7a2c]
-
-/* An ivy leaf lying in the XY plane, stalk at the origin, tip towards +Y, one unit long. */
-const LEAF_OUTLINE = [
-  [0, 0],
-  [0.34, 0.16],
-  [0.46, 0.5],
-  [0.2, 0.62],
-  [0, 1],
-  [-0.2, 0.62],
-  [-0.46, 0.5],
-  [-0.34, 0.16],
+/*
+  Where each of the six leaves is on the ivy leaf image, as [left, top,
+  right, bottom] in pixels of the 1024 square. Every leaf has its stalk at
+  the bottom and its tip at the top.
+*/
+const LEAF_CELLS = [
+  [45, 12, 395, 335],
+  [630, 50, 900, 325],
+  [60, 375, 420, 695],
+  [635, 400, 935, 655],
+  [40, 705, 445, 1012],
+  [600, 705, 925, 1005],
 ]
+const ATLAS = 1024
 
 const turn = new THREE.Quaternion()
 const lean = new THREE.Euler()
 const corner = new THREE.Vector3()
-const tint = new THREE.Color()
 
 interface Growth {
   leaves: number[]
+  uvs: number[]
   colours: number[]
   stems: THREE.BufferGeometry[]
 }
 
-/* One leaf at a point, roughly flat against the door's front, turned and tipped at random. */
+/*
+  One leaf at a point: a flat card showing one of the photographed leaves,
+  stalk at the point, roughly flat against the door's front, turned and
+  tipped at random. `size` is its length from stalk to tip.
+*/
 function addLeaf(
   growth: Growth,
   at: THREE.Vector3,
@@ -105,21 +111,72 @@ function addLeaf(
   random: () => number,
   shade: number,
 ) {
-  // Mostly flat against the door's front, each one turned its own way.
+  const [left, top, right, bottom] = LEAF_CELLS[Math.floor(random() * LEAF_CELLS.length)]
+  const half = (size * (right - left)) / (bottom - top) / 2
   lean.set((random() - 0.5) * 1.3, (random() - 0.5) * 1.3, random() * Math.PI * 2)
   turn.setFromEuler(lean)
-  tint.setHex(LEAF_GREENS[Math.floor(random() * LEAF_GREENS.length)]).multiplyScalar(shade)
-  for (let i = 1; i < LEAF_OUTLINE.length - 1; i++) {
-    for (const index of [0, i, i + 1]) {
-      const [x, y] = LEAF_OUTLINE[index]
-      corner
-        .set(x * size, y * size, 0)
-        .applyQuaternion(turn)
-        .add(at)
-      growth.leaves.push(corner.x, corner.y, corner.z)
-      growth.colours.push(tint.r, tint.g, tint.b)
-    }
+  // Each leaf is a little lighter or darker than the next.
+  const light = shade * (0.8 + random() * 0.35)
+
+  // Two triangles. Image rows count down from the top; v counts up from the bottom.
+  const card = [
+    [-half, 0, left, bottom],
+    [half, 0, right, bottom],
+    [half, size, right, top],
+    [-half, size, left, top],
+  ]
+  for (const index of [0, 1, 2, 0, 2, 3]) {
+    const [x, y, px, py] = card[index]
+    corner.set(x, y, 0).applyQuaternion(turn).add(at)
+    growth.leaves.push(corner.x, corner.y, corner.z)
+    growth.uvs.push(px / ATLAS, 1 - py / ATLAS)
+    // The photographs are pale; bring them towards a deeper green.
+    growth.colours.push(light * 0.82, light, light * 0.7)
   }
+}
+
+/* False outside a browser, where there are no images to load and nothing is drawn. */
+function canLoadImages(): boolean {
+  return typeof document !== 'undefined' && typeof document.createElementNS === 'function'
+}
+
+let leafMaterial: THREE.MeshStandardMaterial | undefined
+let stemMaterial: THREE.MeshStandardMaterial | undefined
+
+/* Photographed ivy leaves: "Leaf Set 017" from ambientCG, CC0. */
+function ivyLeafMaterial(): THREE.MeshStandardMaterial {
+  if (leafMaterial) return leafMaterial
+  leafMaterial = new THREE.MeshStandardMaterial({
+    vertexColors: true,
+    side: THREE.DoubleSide,
+    roughness: 0.7,
+  })
+  if (canLoadImages()) {
+    const load = (file: string) =>
+      new THREE.TextureLoader().load(assets(`textures/ivy_leaves/${file}`))
+    leafMaterial.map = load('colour.jpg')
+    leafMaterial.map.colorSpace = THREE.SRGBColorSpace
+    leafMaterial.map.anisotropy = 8
+    leafMaterial.alphaMap = load('opacity.jpg')
+    leafMaterial.normalMap = load('normal.jpg')
+    // Cut the leaf's outline out of its card.
+    leafMaterial.alphaTest = 0.5
+  }
+  return leafMaterial
+}
+
+/* Woody stems, using the same aged timber as the frame. */
+function ivyStemMaterial(): THREE.MeshStandardMaterial {
+  if (stemMaterial) return stemMaterial
+  stemMaterial = new THREE.MeshStandardMaterial({ color: 0x8a7458, roughness: 1 })
+  if (canLoadImages()) {
+    const bark = woodMaterial().map!.clone()
+    // A tube's UVs run 0 to 1 along it and round it.
+    bark.repeat.set(6, 1)
+    bark.needsUpdate = true
+    stemMaterial.map = bark
+  }
+  return stemMaterial
 }
 
 /* A stem through some points, with leaves along it. */
@@ -131,7 +188,7 @@ function addVine(
 ) {
   const curve = new THREE.CatmullRomCurve3(points)
   const length = curve.getLength()
-  growth.stems.push(new THREE.TubeGeometry(curve, Math.max(4, Math.ceil(length / 0.08)), 0.006, 5))
+  growth.stems.push(new THREE.TubeGeometry(curve, Math.max(4, Math.ceil(length / 0.08)), 0.008, 6))
   const count = Math.max(2, Math.floor(length / options.spacing))
   const at = new THREE.Vector3()
   for (let i = 0; i <= count; i++) {
@@ -160,7 +217,7 @@ export interface Doorway {
 */
 export function ivy({ name, width, height, post }: Doorway): THREE.Group {
   const random = seeded(name)
-  const growth: Growth = { leaves: [], colours: [], stems: [] }
+  const growth: Growth = { leaves: [], uvs: [], colours: [], stems: [] }
   const half = width / 2
   const front = 0.012
   const between = (a: number, b: number) => a + (b - a) * random()
@@ -233,16 +290,11 @@ export function ivy({ name, width, height, post }: Doorway): THREE.Group {
 
   const leafGeometry = new THREE.BufferGeometry()
   leafGeometry.setAttribute('position', new THREE.Float32BufferAttribute(growth.leaves, 3))
+  leafGeometry.setAttribute('uv', new THREE.Float32BufferAttribute(growth.uvs, 2))
   leafGeometry.setAttribute('color', new THREE.Float32BufferAttribute(growth.colours, 3))
   leafGeometry.computeVertexNormals()
-  const leaves = new THREE.Mesh(
-    leafGeometry,
-    new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness: 0.8 }),
-  )
-  const stems = new THREE.Mesh(
-    mergeGeometries(growth.stems),
-    new THREE.MeshStandardMaterial({ color: 0x3d3220, roughness: 1 }),
-  )
+  const leaves = new THREE.Mesh(leafGeometry, ivyLeafMaterial())
+  const stems = new THREE.Mesh(mergeGeometries(growth.stems), ivyStemMaterial())
   const group = new THREE.Group()
   group.add(stems, leaves)
   return group
