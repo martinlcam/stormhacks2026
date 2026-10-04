@@ -19,6 +19,7 @@ export function Hud({
   return (
     <div className="pointer-events-none absolute inset-0 select-none font-sans text-bone">
       {playing ? <Crosshair /> : showStartScreen && <StartScreen onPlay={onPlay} />}
+      {playing && <Goal />}
       <Stats showDiscoveries={showDiscoveries} />
       {showDiscoveries && <DiscoveryCard />}
     </div>
@@ -44,6 +45,24 @@ function Crosshair() {
           {prompt}
         </div>
       )}
+    </div>
+  )
+}
+
+/* The goals of the puzzles the player is standing at. */
+function Goal() {
+  const goal = useGame((s) => s.goal)
+  if (!goal) return null
+  return (
+    <div className="absolute top-3 left-1/2 flex w-max max-w-[min(36rem,calc(100%-14rem))] -translate-x-1/2 flex-col items-center gap-1.5">
+      {goal.split('\n').map((line) => (
+        <div
+          key={line}
+          className="rounded-2xl border border-bone/15 bg-night/75 px-4 py-1.5 text-center text-sm text-bone/90 backdrop-blur"
+        >
+          {line}
+        </div>
+      ))}
     </div>
   )
 }

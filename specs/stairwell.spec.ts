@@ -1,14 +1,23 @@
 import { describe, expect, it } from 'bun:test'
+import * as THREE from 'three'
 import { PlayerController } from '../src/engine/PlayerController'
-import { stairwell } from '../src/world/structures/stairwell'
+import { RINGING, stairwell } from '../src/world/structures/stairwell'
 import { World } from '../src/world/World'
 import { FRAME, gem, quietBrowser } from './support'
 
 /* The tower, and a player standing on the landing by its door. */
 function tower() {
   let turns = 0
+  let rung = 0
+  let fell = 0
   const world = new World()
-  world.build(stairwell(() => turns++))
+  world.build(
+    stairwell(
+      () => turns++,
+      { hint() {}, solved: () => rung++ },
+      { hint() {}, solved: () => fell++ },
+    ),
+  )
   world.finalize()
   const player = new PlayerController(quietBrowser())
   player.position.set(1197, 0, 3)
@@ -19,7 +28,7 @@ function tower() {
       player.update(FRAME, world.colliders, world.portals)
     }
   }
-  return { world, player, walk, turns: () => turns }
+  return { world, player, walk, turns: () => turns, rung: () => rung, fell: () => fell }
 }
 
 /* Walk once round the tower, going up: along each wall in turn. */
@@ -93,6 +102,118 @@ describe('Feature: the endless stairwell', () => {
       expect(body.resting).toBe(false)
       expect(body.position.y).toBeGreaterThan(-4)
       expect(body.position.y).toBeLessThan(6)
+    })
+  })
+
+  describe('Scenario: the gong across the well', () => {
+    /* The gem that lies by the door, let go over the well, and a way to let time pass. */
+    function drop(from: number) {
+      const built = tower()
+      const { body } = built.world.items[0]
+      body.position.set(1200, from, 0)
+      body.resting = false
+      const wait = (seconds: number) => {
+        for (let i = 0; i < seconds / FRAME; i++) {
+          built.world.update(FRAME, 0)
+          body.step(FRAME, built.world.colliders, built.world.portals)
+        }
+      }
+      /* Step onto the lit landing, or off it. */
+      const stand = (on: boolean) => {
+        built.world.checkTriggers(on ? new THREE.Vector3(1203, 2.2, 3) : built.player.position)
+      }
+      return { ...built, body, wait, stand }
+    }
+
+    it('Given nobody is on the lit landing, then the well is open', () => {
+      const { body, wait } = drop(3)
+
+      wait(5)
+
+      expect(body.resting).toBe(false)
+      expect(-body.velocity.y).toBeGreaterThan(RINGING)
+    })
+
+    it('Given I stand on the lit landing, when a gem is dropped from the top of the tower, then the gong catches it and does not ring', () => {
+      const { body, wait, stand, rung } = drop(5.3)
+      stand(true)
+
+      wait(5)
+
+      expect(body.resting).toBe(true)
+      expect(body.position.y).toBeCloseTo(1 + body.radius, 1)
+      expect(rung()).toBe(0)
+    })
+
+    it('Given a gem has fallen round the tower until it can fall no faster, when I step onto the lit landing, then the gong rings', () => {
+      const { body, wait, stand, rung } = drop(3)
+      wait(4)
+      expect(-body.velocity.y).toBeGreaterThan(RINGING)
+
+      stand(true)
+      wait(1)
+
+      expect(rung()).toBe(1)
+    })
+
+    it('Given a gem lies on the shut gong, when I step off the lit landing, then the gem falls', () => {
+      const { body, wait, stand } = drop(2)
+      stand(true)
+      wait(4)
+      expect(body.resting).toBe(true)
+
+      stand(false)
+      wait(1)
+
+      expect(body.resting).toBe(false)
+      expect(-body.velocity.y).toBeGreaterThan(5)
+    })
+  })
+
+  describe('Scenario: falling a hundred metres', () => {
+    /* Let time pass for the world and the player together. */
+    function clock(built: ReturnType<typeof tower>) {
+      let time = 0
+      return (seconds: number, x = 0, z = 0) => {
+        for (let i = 0; i < seconds / FRAME; i++) {
+          built.world.update(FRAME, (time += FRAME))
+          built.walk(x, z, FRAME)
+        }
+      }
+    }
+
+    it('Given I step off into the well, when I have fallen for six seconds, then I have fallen a hundred metres', () => {
+      const built = tower()
+      built.player.position.set(1200, 0, 0)
+
+      clock(built)(6)
+
+      expect(built.fell()).toBe(1)
+    })
+
+    it('Given I step off into the well, when I have fallen for two seconds, then I have not fallen far enough', () => {
+      const built = tower()
+      built.player.position.set(1200, 0, 0)
+
+      clock(built)(2)
+
+      expect(built.turns()).toBeGreaterThan(1)
+      expect(built.fell()).toBe(0)
+    })
+
+    it('Given I climb the stairs for a long time, then I have not fallen at all', () => {
+      const built = tower()
+      const pass = clock(built)
+
+      for (let i = 0; i < 14; i++) {
+        pass(2.2, 4, 0)
+        pass(2.2, 0, -4)
+        pass(2.2, -4, 0)
+        pass(2.2, 0, 4)
+      }
+
+      expect(built.turns()).toBe(14)
+      expect(built.fell()).toBe(0)
     })
   })
 })

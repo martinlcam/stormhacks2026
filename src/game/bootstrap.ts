@@ -12,6 +12,7 @@ import { sculpture } from '../world/structures/sculpture'
 import { stairwell } from '../world/structures/stairwell'
 import { Avatar } from './avatar'
 import { ItemSystem } from './items'
+import type { DiscoveryId } from './discoveries'
 import type { LightingScene, LightingView } from './lightingScenes'
 import { useLightingSettings } from './lightingSettings'
 import { Sound } from './sound'
@@ -34,21 +35,42 @@ export function bootstrap(
     : undefined
 
   if (!lightingScene) {
+    // A puzzle shows its goal while the player is at it, and is a discovery once solved.
+    // Two puzzles can be within reach at once: each goal is a line of its own.
+    const goals = new Map<DiscoveryId, string>()
+    const puzzle = (id: DiscoveryId) => ({
+      hint: (text: string | null) => {
+        goals.delete(id)
+        if (text !== null) goals.set(id, text)
+        game.setGoal([...goals.values()].join('\n') || null)
+      },
+      solved: () => game.discover(id),
+    })
     // Add a structure here and it is part of the sandbox.
     const structures = [
       hub,
-      biggerInside(() => game.discover('bigger-inside')),
-      loopCorridor(() => game.discover('loop-corridor')),
+      biggerInside(
+        () => game.discover('bigger-inside'),
+        puzzle('long-way-round'),
+        puzzle('seating-plan'),
+      ),
+      loopCorridor(() => game.discover('loop-corridor'), puzzle('floors-without-stairs')),
       gravityRoom(
         () => game.discover('walls-are-floors'),
         () => game.discover('on-the-ceiling'),
+        puzzle('three-downs'),
       ),
       resizingDoors(
         () => game.discover('resizing-door'),
         () => game.discover('small-world'),
+        puzzle('powers-of-four'),
       ),
       sculpture(() => game.discover('hypercube')),
-      stairwell(() => game.discover('endless-stairwell')),
+      stairwell(
+        () => game.discover('endless-stairwell'),
+        puzzle('falling-faster'),
+        puzzle('further-down'),
+      ),
     ]
 
     for (const structure of structures) world.build(structure)

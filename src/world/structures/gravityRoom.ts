@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import type { Structure } from '../World'
 import { glow, gridTexture, matte, palette } from '../materials'
+import { addBeacon, addRegion, addSocket, type PuzzleEvents, ramp } from '../puzzle'
 
 /* Detached rooms live far from the plaza so they are never seen directly. */
 const ROOM_X = -600
@@ -8,6 +9,8 @@ const ROOM_X = -600
 const SIZE = 10
 const HALF = SIZE / 2
 const WALL = 0.3
+/* The puzzle's colours: gold to coral. */
+const WARM = [0xffc857, 0xff6f61]
 
 /*
   One cubic room in which three surfaces are floors.
@@ -20,8 +23,17 @@ const WALL = 0.3
 
   Gems obey the same rule. One carried or thrown through a door falls
   towards whichever surface is the floor on the far side.
+
+  The puzzle: a plate on each of the three floors, and three gems. A gem
+  must rest on every plate at once. Thrown up at the wall or the ceiling
+  from the floor, a gem falls back, because its down is still the floor's.
+  Only a door turns it.
 */
-export function gravityRoom(onWall: () => void, onCeiling: () => void): Structure {
+export function gravityRoom(
+  onWall: () => void,
+  onCeiling: () => void,
+  puzzle: PuzzleEvents,
+): Structure {
   return {
     name: 'gravity-room',
     build(world) {
@@ -100,8 +112,61 @@ export function gravityRoom(onWall: () => void, onCeiling: () => void): Structur
         collide: false,
       })
 
-      world.addItem({ position: [x + 1, 0.18, 2], material: glow(palette.purple, 1.2) })
-      world.addItem({ position: [x - 2.5, 0.18, 2.5], material: glow(palette.cyan, 1.2) })
+      const gems = [
+        [x + 1, 0.18, 2],
+        [x - 2.5, 0.18, 2.5],
+        [x - 1, 0.18, 3.2],
+      ].map(([gx, gy, gz], i) =>
+        world.addItem({ position: [gx, gy, gz], material: glow(ramp(WARM, i / 2), 1.2) }),
+      )
+
+      // One plate on each floor: the floor, the +X wall and the ceiling.
+      const plates = [
+        addSocket(world, { position: [x - 3.5, 0, -3.5], colour: ramp(WARM, 0), items: gems }),
+        addSocket(world, {
+          position: [x + HALF, 3.5, 2.5],
+          up: 'x-',
+          colour: ramp(WARM, 0.5),
+          items: gems,
+        }),
+        addSocket(world, {
+          position: [x + 2.5, SIZE, -2.5],
+          up: 'y-',
+          colour: ramp(WARM, 1),
+          items: gems,
+        }),
+      ]
+      // Hangs in the middle of the room, where it is seen from every floor.
+      const beacon = addBeacon(world, [x, HALF - 0.9, 0], WARM, 1.8, false)
+
+      let solved = false
+      const refresh = addRegion(
+        world,
+        [
+          [
+            [x - HALF - 0.5, -1, -HALF - 0.5],
+            [x + HALF + 0.5, SIZE + 1, HALF + 0.5],
+          ],
+        ],
+        puzzle,
+        () =>
+          solved
+            ? 'Solved: three downs'
+            : 'Rest a gem on all three plates at once: floor, wall and ceiling.',
+      )
+      world.onUpdate(() => {
+        let filled = 0
+        for (const plate of plates) {
+          const holds = plate.holds() !== null
+          plate.show(holds ? 'filled' : 'ready')
+          if (holds) filled++
+        }
+        if (filled < plates.length || solved) return
+        solved = true
+        beacon(true)
+        puzzle.solved()
+        refresh()
+      })
 
       // Every door stands 10 cm off the surface behind it, which is its backing.
       const gap = 0.1

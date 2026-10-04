@@ -3,6 +3,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { PLANK_TILE, plankMaterial, woodMaterial } from '../foliage'
 import type { Structure } from '../World'
 import { glow, matte, palette } from '../materials'
+import { addBeacon, addRegion, addSocket, type PuzzleEvents, ramp, shine } from '../puzzle'
 
 /* Detached rooms live far from the hub so they are never seen directly. */
 const ROOM_X = 600
@@ -18,6 +19,20 @@ const WINDOWS = [-3, 0, 3]
 const WINDOW_WIDTH = 2.2
 const SILL = 0.9
 const HEAD = 2.5
+/* Where the wall of light crosses the room: between the front desks and the teacher's. */
+const WALL_Z = -3.1
+/* Where the second door is along the front wall, beside the blackboard. */
+const BACK_DOOR_X = 3.6
+/* The puzzle's colours: amber, pale to deep. */
+const AMBER = [0xffd27a, 0xff8a3d]
+/* The desks: where the columns (x) and the rows (z) are, and the size of a desk's top. */
+const DESK_X = [-2.7, -0.9, 0.9, 2.7]
+const DESK_Z = [-2.2, -0.6, 1, 2.6]
+const DESK_WIDTH = 0.65
+const DESK_DEPTH = 0.45
+const DESK_TOP = 0.74
+/* The colour of the second puzzle: chalk. */
+const CHALK = 0xf2efe6
 
 type Vec3 = [number, number, number]
 
@@ -258,9 +273,9 @@ function classroom(world: Parameters<Structure['build']>[0]) {
   }
 
   // Sixteen desks in four rows, each with its chair behind it.
-  for (const x of [-2.7, -0.9, 0.9, 2.7]) {
-    for (const z of [-2.2, -0.6, 1, 2.6]) {
-      table(x, z, 0.65, 0.45, 0.74)
+  for (const x of DESK_X) {
+    for (const z of DESK_Z) {
+      table(x, z, DESK_WIDTH, DESK_DEPTH, DESK_TOP)
       chair(x, z + 0.48)
     }
   }
@@ -298,8 +313,23 @@ function classroom(world: Parameters<Structure['build']>[0]) {
 /*
   A booth two metres across whose door opens onto a classroom far too large
   to fit inside it. Walk around the booth, then walk in.
+
+  The puzzle: a wall of light cuts the classroom in two from side to side,
+  with a gem behind it at the blackboard and the gem's socket in front. The
+  booth has a second door on its back, which opens beside the blackboard.
+  Inside, the two doors are eleven metres apart with a wall between them.
+  Outside, they are the two sides of a box two metres deep, so the way round
+  the wall is round the booth.
+
+  The second puzzle is a lesson: four chalk gems lie at the back of the
+  room, and each is to be seated at a desk so that no two are in the same
+  row or the same column. A strip on each desk lights while a gem sits there.
 */
-export function biggerInside(onEnter: () => void): Structure {
+export function biggerInside(
+  onEnter: () => void,
+  puzzle: PuzzleEvents,
+  lesson: PuzzleEvents,
+): Structure {
   return {
     name: 'bigger-inside',
     build(world) {
@@ -330,6 +360,152 @@ export function biggerInside(onEnter: () => void): Structure {
       })
       world.link(outside, inside)
       outside.onTraverse = onEnter
+
+      // The second pair: the back of the booth opens onto the front of the classroom.
+      const outsideBack = world.addDoor({
+        name: 'booth-back',
+        position: [0, 0, -9.2],
+        facing: 2,
+        overgrown: true,
+      })
+      const insideBack = world.addDoor({
+        name: 'hall-back',
+        position: [ROOM_X + BACK_DOOR_X, 0, -DEPTH / 2 + 0.16],
+        facing: 0,
+        frameMaterial: glow(AMBER[1]),
+      })
+      world.link(outsideBack, insideBack)
+      outsideBack.onTraverse = onEnter
+
+      // The wall of light: bars too close for a gem, and solid from side to side.
+      world.addCollider(
+        [ROOM_X - WIDTH / 2, 0, WALL_Z - 0.1],
+        [ROOM_X + WIDTH / 2, HEIGHT, WALL_Z + 0.1],
+      )
+      const bars = WIDTH * 2
+      for (let i = 0; i < bars; i++) {
+        world.addBox({
+          size: [0.08, HEIGHT, 0.08],
+          position: [ROOM_X - WIDTH / 2 + 0.25 + i * 0.5, HEIGHT / 2, WALL_Z],
+          material: glow(ramp(AMBER, i / (bars - 1)), 1.4),
+          collide: false,
+        })
+      }
+      for (const [i, y] of [0.6, 1.6, 2.6].entries()) {
+        world.addBox({
+          size: [WIDTH, 0.06, 0.06],
+          position: [ROOM_X, y, WALL_Z],
+          material: glow(ramp(AMBER, i / 2), 1.4),
+          collide: false,
+        })
+      }
+
+      const key = world.addItem({
+        position: [ROOM_X + 1, 0.18, -4.4],
+        material: glow(ramp(AMBER, 0.5), 1.3),
+      })
+      const socket = addSocket(world, {
+        position: [ROOM_X + 0.5, 0, 4.4],
+        colour: ramp(AMBER, 0.5),
+        items: [key],
+      })
+      const beacon = addBeacon(world, [ROOM_X - 4.25, 0, 5.2], AMBER)
+
+      let solved = false
+      const refresh = addRegion(
+        world,
+        [
+          [
+            [ROOM_X - WIDTH / 2 - 0.5, -1, -DEPTH / 2 - 0.5],
+            [ROOM_X + WIDTH / 2 + 0.5, HEIGHT + 1, DEPTH / 2 + 0.5],
+          ],
+          // Around the booth too: the answer is out here.
+          [
+            [-2.5, -1, -11.5],
+            [2.5, 5, -5.5],
+          ],
+        ],
+        puzzle,
+        () =>
+          solved
+            ? 'Solved: the long way round is short'
+            : 'Put the amber gem in the socket. The wall of light has no gap.',
+      )
+      world.onUpdate(() => {
+        const filled = socket.holds() !== null
+        socket.show(filled ? 'filled' : 'ready')
+        if (!filled || solved) return
+        solved = true
+        beacon(true)
+        puzzle.solved()
+        refresh()
+      })
+
+      // The lesson. A strip along the front of each desk, lit while a gem sits at it.
+      const strips = DESK_Z.map((z) =>
+        DESK_X.map((x) =>
+          world.addBox({
+            size: [DESK_WIDTH - 0.1, 0.01, 0.03],
+            position: [ROOM_X + x, DESK_TOP + 0.005, z - DESK_DEPTH / 2 + 0.03],
+            material: glow(CHALK, 0.1),
+            collide: false,
+          }),
+        ),
+      )
+      const chalks = [1.4, 2, 2.6, 3.2].map((x) =>
+        world.addItem({ position: [ROOM_X + x, 0.18, 4.6], material: glow(CHALK, 1) }),
+      )
+      /* The row and column of the desk a gem is lying on, if it is on one. */
+      const seatOf = ({ body }: (typeof chalks)[number]): [number, number] | null => {
+        if (body.velocity.length() > 0.5) return null
+        if (Math.abs(body.position.y - DESK_TOP - body.radius) > 0.08) return null
+        const column = DESK_X.findIndex(
+          (x) => Math.abs(body.position.x - ROOM_X - x) < DESK_WIDTH / 2,
+        )
+        const row = DESK_Z.findIndex((z) => Math.abs(body.position.z - z) < DESK_DEPTH / 2)
+        return row < 0 || column < 0 ? null : [row, column]
+      }
+
+      let seated = 0
+      let clash = false
+      let learnt = false
+      const report = addRegion(
+        world,
+        [
+          [
+            [ROOM_X - WIDTH / 2 - 0.5, -1, -DEPTH / 2 - 0.5],
+            [ROOM_X + WIDTH / 2 + 0.5, HEIGHT + 1, DEPTH / 2 + 0.5],
+          ],
+        ],
+        lesson,
+        () =>
+          learnt
+            ? 'Solved: a seating plan'
+            : `Seat the four chalk gems at desks, no two in the same row or column. Seated: ${seated} of 4${clash ? ', and two share a row or column' : ''}.`,
+      )
+      world.onUpdate(() => {
+        if (learnt) return
+        const seats = chalks.map(seatOf).filter((seat) => seat !== null)
+        const rows = new Set(seats.map(([row]) => row))
+        const columns = new Set(seats.map(([, column]) => column))
+        const clashes = rows.size < seats.length || columns.size < seats.length
+        strips.forEach((line, row) =>
+          line.forEach((strip, column) => {
+            const taken = seats.some((seat) => seat[0] === row && seat[1] === column)
+            shine(strip, taken ? 2 : 0.1)
+          }),
+        )
+        if (seats.length !== seated || clashes !== clash) {
+          seated = seats.length
+          clash = clashes
+          report()
+        }
+        if (seated < chalks.length || clash) return
+        learnt = true
+        for (const strip of strips.flat()) shine(strip, 2)
+        lesson.solved()
+        report()
+      })
     },
   }
 }

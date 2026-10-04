@@ -16,11 +16,14 @@ interface GameState {
   prompt: string | null
   /* How full the throw charge is, 0 to 1, or null when not charging. */
   charge: number | null
+  /* The goals of the puzzles the player is standing at, one to a line, if any. */
+  goal: string | null
 
   setPlaying(playing: boolean): void
   setStats(fps: number, passes: number, scale: number): void
   setPrompt(prompt: string | null): void
   setCharge(charge: number | null): void
+  setGoal(goal: string | null): void
   discover(id: DiscoveryId): void
   dismissCard(): void
 }
@@ -38,11 +41,13 @@ export const useGame = create<GameState>((set, get) => ({
   card: null,
   prompt: null,
   charge: null,
+  goal: null,
 
   setPlaying: (playing) => set({ playing }),
   setStats: (fps, passes, scale) => set({ fps, passes, scale }),
   setPrompt: (prompt) => set({ prompt }),
   setCharge: (charge) => set({ charge }),
+  setGoal: (goal) => set({ goal }),
   discover: (id) => {
     if (get().found.includes(id)) return
     set({ found: [...get().found, id], card: discoveries[id] })

@@ -1,17 +1,28 @@
 import { PLANK_TILE, plankMaterial } from '../foliage'
 import type { Structure } from '../World'
 import { glow, matte, palette } from '../materials'
+import { addBeacon, addRegion, addSocket, type PuzzleEvents, ramp } from '../puzzle'
 
 /* How much smaller the small door is, and so how much it shrinks you. */
 const RATIO = 0.25
+/* The puzzle's colours, from full size down: lime, teal, blue, violet. */
+const SIZES = [0xb6f25c, 0x2ed3b7, 0x4f8dff, 0x9b6bff]
 
 /*
   A full-size door joined to one a quarter of its size. Going in the tall
   door brings you out of the small one at a quarter scale; going back in the
   small one restores you. Nearby stands a vault whose only way in is a gap
   too low for anyone full-sized.
+
+  The puzzle: three gems, all full size, and three sockets that each take a
+  gem of one size only: as found, a quarter, and a sixteenth. The tall door
+  only ever divides by four, so the smallest gem has to go through it twice.
 */
-export function resizingDoors(onResize: () => void, onEnterVault: () => void): Structure {
+export function resizingDoors(
+  onResize: () => void,
+  onEnterVault: () => void,
+  puzzle: PuzzleEvents,
+): Structure {
   return {
     name: 'resizing-doors',
     build(world) {
@@ -103,6 +114,80 @@ export function resizingDoors(onResize: () => void, onEnterVault: () => void): S
       })
       world.onUpdate((_dt, time) => core.rotation.set(time * 0.5, time * 0.7, 0))
       world.addTrigger([vx - 1.5, -1, vz - 1.5], [vx + 1.5, height, vz + 1.5], onEnterVault)
+
+      const gems = [
+        [-3.6, 0.18, -6.2],
+        [-4.2, 0.18, -6.8],
+        [-3, 0.18, -6.8],
+      ].map(([gx, gy, gz], i) =>
+        world.addItem({ position: [gx, gy, gz], material: glow(SIZES[i], 1.2) }),
+      )
+
+      // Full size in the open, a quarter in the vault, a sixteenth by the small door.
+      const mouse: [number, number, number] = [-5.3, 0, -3.8]
+      const sockets = [
+        addSocket(world, { position: [-4.5, 0, -3], colour: SIZES[0], items: gems }),
+        addSocket(world, {
+          position: [vx - 0.8, 0, vz + 0.7],
+          width: 0.4,
+          size: RATIO,
+          colour: ramp(SIZES, 0.5),
+          items: gems,
+        }),
+        addSocket(world, {
+          position: mouse,
+          width: 0.2,
+          size: RATIO * RATIO,
+          colour: SIZES[3],
+          items: gems,
+        }),
+      ]
+      // The mouse-hole: an arch over the smallest socket, so it can be found.
+      const arch = glow(SIZES[3], 1.4)
+      for (const side of [-1, 1]) {
+        world.addBox({
+          size: [0.03, 0.3, 0.03],
+          position: [mouse[0], 0.15, mouse[2] + side * 0.14],
+          material: arch,
+          collide: false,
+        })
+      }
+      world.addBox({
+        size: [0.03, 0.03, 0.31],
+        position: [mouse[0], 0.315, mouse[2]],
+        material: arch,
+        collide: false,
+      })
+      const beacon = addBeacon(world, [-6.25, 0, -6.3], SIZES)
+
+      let solved = false
+      const refresh = addRegion(
+        world,
+        [
+          [
+            [-12.5, -1, -10],
+            [-2.5, 6, 0.5],
+          ],
+        ],
+        puzzle,
+        () =>
+          solved
+            ? 'Solved: powers of four'
+            : 'Fill each socket with a gem of its own size: ×1, ×1/4 and ×1/16.',
+      )
+      world.onUpdate(() => {
+        let filled = 0
+        for (const socket of sockets) {
+          const holds = socket.holds() !== null
+          socket.show(holds ? 'filled' : 'ready')
+          if (holds) filled++
+        }
+        if (filled < sockets.length || solved) return
+        solved = true
+        beacon(true)
+        puzzle.solved()
+        refresh()
+      })
     },
   }
 }

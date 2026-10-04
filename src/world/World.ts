@@ -154,6 +154,7 @@ export class World {
     site: Site
     inside: boolean
     onEnter: () => void
+    onLeave?: () => void
   }[] = []
 
   /* Build a structure at its site. */
@@ -167,6 +168,21 @@ export class World {
   private solid(box: THREE.Box3) {
     assign(box, this.site)
     this.colliders.push(box)
+  }
+
+  /* The site of the structure being built. */
+  get building(): Site {
+    return this.site
+  }
+
+  /* Draw something that is not a box, at the site of the structure being built. */
+  add(object: THREE.Object3D) {
+    object.traverse((part) => {
+      // The stored bounds are not where a mesh on the planet is drawn.
+      part.frustumCulled = false
+    })
+    assign(object, this.site)
+    this.scene.add(object)
   }
 
   addBox({
@@ -223,10 +239,11 @@ export class World {
     Something solid with nothing to draw. `everywhere` makes it solid on
     every site's map, as the ground is.
   */
-  addCollider(min: Vec3, max: Vec3, everywhere = false) {
+  addCollider(min: Vec3, max: Vec3, everywhere = false): THREE.Box3 {
     const box = new THREE.Box3(new THREE.Vector3(...min), new THREE.Vector3(...max))
     if (everywhere) this.colliders.push(box)
     else this.solid(box)
+    return box
   }
 
   /*
@@ -354,16 +371,20 @@ export class World {
     b.link(a)
   }
 
-  /* Run `onEnter` each time the player's feet move into the box. */
-  addTrigger(min: Vec3, max: Vec3, onEnter: () => void) {
+  /*
+    Run `onEnter` each time the player's feet move into the box, and
+    `onLeave` each time they move out of it.
+  */
+  addTrigger(min: Vec3, max: Vec3, onEnter: () => void, onLeave?: () => void) {
     const box = new THREE.Box3(new THREE.Vector3(...min), new THREE.Vector3(...max))
-    this.triggers.push({ box, site: this.site, inside: false, onEnter })
+    this.triggers.push({ box, site: this.site, inside: false, onEnter, onLeave })
   }
 
   checkTriggers(player: THREE.Vector3, site: Site = POLE) {
     for (const trigger of this.triggers) {
       const inside = trigger.site === site && trigger.box.containsPoint(player)
       if (inside && !trigger.inside) trigger.onEnter()
+      if (!inside && trigger.inside) trigger.onLeave?.()
       trigger.inside = inside
     }
   }
