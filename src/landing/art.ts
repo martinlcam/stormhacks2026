@@ -3,9 +3,6 @@ import { FRAME } from './timeline'
 
 const dir = `${import.meta.env.BASE_URL}landing/`
 
-/* Helvetica, as in the Figma file. */
-export const FONT = 'Helvetica, "Helvetica Neue", Arial, sans-serif'
-
 /* The greys of the title and of the captions. */
 export const INK = '#434343'
 export const CAPTION_INK = '#584747'

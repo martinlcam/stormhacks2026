@@ -83,23 +83,23 @@ function StartScreen({ onPlay }: { onPlay: () => void }) {
         down, or hold Q to throw it.
       </p>
       <dl className="grid grid-cols-[auto_auto] gap-x-4 gap-y-1 text-left text-sm text-bone/60">
-        <dt className="font-mono text-cyan">WASD</dt>
+        <dt className="font-medium text-cyan">WASD</dt>
         <dd>move</dd>
-        <dt className="font-mono text-cyan">Mouse</dt>
+        <dt className="font-medium text-cyan">Mouse</dt>
         <dd>look</dd>
-        <dt className="font-mono text-cyan">Shift</dt>
+        <dt className="font-medium text-cyan">Shift</dt>
         <dd>run</dd>
-        <dt className="font-mono text-cyan">Space</dt>
+        <dt className="font-medium text-cyan">Space</dt>
         <dd>jump</dd>
-        <dt className="font-mono text-cyan">E</dt>
+        <dt className="font-medium text-cyan">E</dt>
         <dd>pick up / put down</dd>
-        <dt className="font-mono text-cyan">Q</dt>
+        <dt className="font-medium text-cyan">Q</dt>
         <dd>throw (hold to charge)</dd>
-        <dt className="font-mono text-cyan">R</dt>
+        <dt className="font-medium text-cyan">R</dt>
         <dd>back to the start</dd>
-        <dt className="font-mono text-cyan">M</dt>
+        <dt className="font-medium text-cyan">M</dt>
         <dd>sound off / on</dd>
-        <dt className="font-mono text-cyan">Esc</dt>
+        <dt className="font-medium text-cyan">Esc</dt>
         <dd>release mouse</dd>
       </dl>
     </button>
@@ -112,7 +112,7 @@ function Stats({ showDiscoveries }: { showDiscoveries: boolean }) {
   const found = useGame((s) => s.found.length)
   const scale = useGame((s) => s.scale)
   return (
-    <div className="absolute top-3 right-4 text-right font-mono text-xs text-bone/50">
+    <div className="absolute top-3 right-4 text-right text-xs text-bone/50 tabular-nums">
       <div>
         {fps} fps · {passes} views
       </div>

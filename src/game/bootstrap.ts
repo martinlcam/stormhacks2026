@@ -23,15 +23,25 @@ const WALK_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD'])
 /* Pixels of mouse movement that count as having looked around: about half a turn. */
 const LOOK_PIXELS = 1400
 
+/* A running game, or one built ahead of time and waiting to be shown. */
+export interface Game {
+  /* Start drawing and simulating, if it was built paused. */
+  play(): void
+  /* Tear everything down again. */
+  dispose(): void
+}
+
 /*
   Build the sandbox, start the engine and wire both to the store.
-  Returns a function that tears everything down again.
+  With `paused`, it is built but not started: the landing page builds it
+  behind itself, so that going into the game does not stall on it.
 */
 export function bootstrap(
   canvas: HTMLCanvasElement,
   lightingScene?: LightingScene,
   lightingView: LightingView = 'default',
-): () => void {
+  { paused = false } = {},
+): Game {
   const game = useGame.getState()
 
   const world = new World()
@@ -154,20 +164,32 @@ export function bootstrap(
     worldLamp?.update()
   })
 
-  engine.start()
+  if (paused) {
+    // Compile the shaders without blocking, then draw one frame to send the textures to the
+    // graphics card, so that the first frame shown later does not stall.
+    void engine.renderer
+      .compileAsync(world.scene, engine.camera)
+      .then(() => engine.frame())
+      .catch(() => {})
+  } else {
+    engine.start()
+  }
 
   if (import.meta.env.DEV) {
     // Handy in the console: __engine.player.position.set(...)
     Object.assign(window, { __engine: engine, __items: items, __sound: sound })
   }
 
-  return () => {
-    keys.abort()
-    stopListening()
-    sound.dispose()
-    items.dispose()
-    lightingLab?.dispose()
-    worldLamp?.dispose()
-    engine.dispose()
+  return {
+    play: () => engine.start(),
+    dispose: () => {
+      keys.abort()
+      stopListening()
+      sound.dispose()
+      items.dispose()
+      lightingLab?.dispose()
+      worldLamp?.dispose()
+      engine.dispose()
+    },
   }
 }
