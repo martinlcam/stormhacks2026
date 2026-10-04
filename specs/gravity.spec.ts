@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test'
 import * as THREE from 'three'
 import { type Axis, frameFor, reorient, upVector } from '../src/engine/gravity'
+import { configurePlanet } from '../src/engine/planet'
 import { PlayerController } from '../src/engine/PlayerController'
 import { World } from '../src/world/World'
 import { FACING, door, doorOn, gem, linked, quietBrowser, simulate } from './support'
@@ -177,6 +178,55 @@ describe('Feature: a door lying in the floor is a hole', () => {
       expect<Axis>(player.axis).toBe('x-')
       expect(player.onGround).toBe(true)
       expect(player.position.x).toBeCloseTo(5, 2)
+    })
+  })
+})
+
+describe('Feature: falling out of the room onto the plaza', () => {
+  // The plaza is a planet with one up. A door on it is joined to a door in a
+  // far-off room, on that room's north wall.
+  const build = () => {
+    const material = new THREE.MeshBasicMaterial()
+    const world = new World()
+    world.addCollider([-132, -1, -132], [132, 0, 132])
+    world.addBox({ size: [10.6, 10, 0.3], position: [-600, 5, 5.15], material })
+    const outside = world.addDoor({
+      name: 'outside',
+      position: [-5, 0, 9],
+      facing: 2,
+      frameMaterial: material,
+      backing: material,
+    })
+    const inside = world.addDoor({
+      name: 'inside',
+      position: [-600, 0, 4.9],
+      facing: 2,
+      frameMaterial: material,
+    })
+    world.link(outside, inside)
+    world.finalize()
+    return { world, player: new PlayerController(quietBrowser()) }
+  }
+
+  describe('Scenario: the north wall is my floor and I step onto the way out', () => {
+    it('Given I stand on the north wall over the door to the plaza, when I fall through it, then I arrive on the plaza upright, on the ground, beside its door', () => {
+      configurePlanet(240)
+      const { world, player } = build()
+      player.axis = 'z-'
+      player.position.set(-600, 1.1, 5)
+
+      for (let i = 0; i < 120 && player.position.x < -300; i++) {
+        player.update(1 / 60, world.colliders, world.portals)
+      }
+      // The moment of arrival: upright, and not under the ground.
+      expect<Axis>(player.axis).toBe('y+')
+      expect(player.position.y).toBeGreaterThanOrEqual(0)
+
+      for (let i = 0; i < 180; i++) player.update(1 / 60, world.colliders, world.portals)
+      expect(player.onGround).toBe(true)
+      expect(player.position.y).toBeCloseTo(0, 2)
+      expect(Math.hypot(player.position.x + 5, player.position.z - 9)).toBeLessThan(15)
+      configurePlanet(null)
     })
   })
 })

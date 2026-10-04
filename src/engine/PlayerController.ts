@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { type Axis, frameFor, inverseFrameFor, reorient, upVector } from './gravity'
-import { onPlanet, standOnPlanet, walkOnPlanet } from './planet'
+import { onPlanet, standOnPlanet, upAt, walkOnPlanet } from './planet'
 import type { Portal } from './Portal'
 
 const RADIUS = 0.3
@@ -23,6 +23,12 @@ const localAfter = new THREE.Vector3()
 const eyeBefore = new THREE.Vector3()
 const eyeAfter = new THREE.Vector3()
 const sample = new THREE.Vector3()
+const expected = new THREE.Quaternion()
+const gaze = new THREE.Vector3()
+const cameraUp = new THREE.Vector3()
+const NO_TILT = new THREE.Quaternion()
+/* How quickly the view settles after a door leaves the player off balance, per second. */
+const SETTLE_RATE = 7
 /* How many steps the body is checked in, from feet to eye, against a doorway. */
 const BODY_SAMPLES = 3
 const frameTurn = new THREE.Quaternion()
@@ -57,6 +63,17 @@ export class PlayerController {
   readonly spawn = new THREE.Vector3()
   spawnYaw = 0
   onLockChange?: (locked: boolean) => void
+
+  /*
+    A door can bring the player out somewhere they cannot stay as they are:
+    on the plaza there is only one up, and the eye may arrive lower than a
+    standing body allows. The body is put right at once, and the difference
+    is kept here and eased away, so the view rolls upright and rises instead
+    of snapping. `tilt` is a rotation of the view; `sink` is how far the view
+    is held below the eye, in metres.
+  */
+  private readonly tilt = new THREE.Quaternion()
+  private sink = 0
 
   private readonly keys = new Set<string>()
   /* The world's boxes as seen from inside each frame other than y-up. */
@@ -98,6 +115,8 @@ export class PlayerController {
     this.pitch = 0
     this.axis = 'y+'
     this.scale = 1
+    this.sink = 0
+    this.tilt.identity()
   }
 
   update(dt: number, colliders: readonly THREE.Box3[], portals: readonly Portal[]) {
@@ -123,6 +142,10 @@ export class PlayerController {
     const steps = Math.max(1, Math.ceil(distance / (MAX_STEP * this.scale)))
     const stepDt = dt / steps
     for (let i = 0; i < steps; i++) this.step(stepDt, colliders, portals)
+
+    const settle = Math.exp(-SETTLE_RATE * dt)
+    this.sink *= settle
+    this.tilt.slerp(NO_TILT, 1 - settle)
 
     if (this.position.y < -40) this.respawn()
   }
@@ -154,17 +177,27 @@ export class PlayerController {
     const eye = EYE_HEIGHT * this.scale
     if (onPlanet(this.position)) {
       standOnPlanet(camera, this.position, eye, this.yaw, this.pitch)
+      upAt(this.position, cameraUp)
     } else {
       camera.position.copy(this.position).addScaledVector(this.up, eye)
-      frameTurn.setFromRotationMatrix(frameFor(this.axis))
-      lookTurn.setFromEuler(lookEuler.set(this.pitch, this.yaw, 0, 'YXZ'))
-      camera.quaternion.copy(frameTurn).multiply(lookTurn)
+      this.orientation(this.axis, this.yaw, this.pitch, camera.quaternion)
+      cameraUp.copy(this.up)
     }
+    // Whatever has not settled yet since the last door.
+    camera.position.addScaledVector(cameraUp, -this.sink)
+    camera.quaternion.multiply(this.tilt)
     // Scaling the camera measures the view in the player's own units, so the
     // near plane and fog shrink with them, and the view through a resizing
     // portal matches what they see once they have stepped through.
     camera.scale.setScalar(this.scale)
     camera.updateMatrixWorld(true)
+  }
+
+  /* The view's orientation for a given up, yaw and pitch, off the planet. */
+  private orientation(axis: Axis, yaw: number, pitch: number, target: THREE.Quaternion) {
+    frameTurn.setFromRotationMatrix(frameFor(axis))
+    lookTurn.setFromEuler(lookEuler.set(pitch, yaw, 0, 'YXZ'))
+    return target.copy(frameTurn).multiply(lookTurn)
   }
 
   private onMouseMove(event: MouseEvent) {
@@ -277,6 +310,24 @@ export class PlayerController {
     }
   }
 
+  /*
+    The plaza has only one up. A player who arrives there standing any other
+    way is stood upright at once, looking in the same direction, and the
+    roll that this takes out of their view is handed to `tilt` to ease away.
+  */
+  private standUpright(arrived: Axis) {
+    this.orientation(arrived, this.yaw, this.pitch, expected)
+    gaze.set(0, 0, -1).applyQuaternion(expected)
+    this.axis = 'y+'
+    this.pitch = Math.asin(Math.max(-1, Math.min(1, gaze.y)))
+    this.pitch = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, this.pitch))
+    // Looking straight up or down leaves no heading to keep; take the top of the view.
+    if (Math.hypot(gaze.x, gaze.z) < 1e-3) gaze.set(0, 1, 0).applyQuaternion(expected)
+    this.yaw = Math.atan2(-gaze.x, -gaze.z)
+    // upright · tilt = what the view was, so the first frame is unchanged.
+    this.orientation('y+', this.yaw, this.pitch, this.tilt).invert().multiply(expected)
+  }
+
   /* A door can be gone through by anyone who fits, whichever way up they are. */
   private canEnter(portal: Portal) {
     return portal.fits(RADIUS * 2 * this.scale, HEIGHT * this.scale)
@@ -327,13 +378,23 @@ export class PlayerController {
       const speed = this.velocity.length() * ratio
       this.scale *= ratio
       this.velocity.transformDirection(portal.transform).multiplyScalar(speed)
-      // The door may turn the player onto a wall or the ceiling. The planet
-      // has only one up.
+      // The door may turn the player onto a wall or the ceiling.
       const turned = reorient(this.axis, this.yaw, portal.transform)
-      this.axis = onPlanet(eyeAfter) ? 'y+' : turned.axis
+      this.axis = turned.axis
       this.yaw = turned.yaw
+      if (turned.axis !== 'y+' && onPlanet(eyeAfter)) this.standUpright(turned.axis)
       // Hang the body from the eye, along the new up.
       this.position.copy(eyeAfter).addScaledVector(this.up, -EYE_HEIGHT * this.scale)
+      // The eye may have come through lower than a standing body allows,
+      // which would put the feet under the far door's floor. Stand on that
+      // floor and let the view rise to its place.
+      if (portal.target.up.dot(this.up) > 0.9) {
+        const below = -portal.target.toLocal(this.position, sample).y * portal.target.scale
+        if (below > 0) {
+          this.position.addScaledVector(this.up, below)
+          this.sink += below
+        }
+      }
       portal.onTraverse?.()
       return
     }
