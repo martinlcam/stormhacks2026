@@ -15,7 +15,7 @@ export interface LandingSound {
 
 const VOLUME = 0.7
 const WIND = 0.16
-const RAIN = 0.4
+const RAIN = 0.12
 /* Seconds that the rain recording's end is faded into its start, so it loops without a join. */
 const RAIN_BLEND = 2
 

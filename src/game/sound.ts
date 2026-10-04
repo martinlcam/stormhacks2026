@@ -111,7 +111,7 @@ export class Sound {
         falling.buffer = rain
         falling.loop = true
         const wet = context.createGain()
-        wet.gain.value = 0.7
+        wet.gain.value = 0.2
         falling.connect(wet).connect(master)
         falling.start()
       })
