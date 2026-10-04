@@ -13,18 +13,27 @@ const BASE_RADIUS = 0.3
 const RIM_RADIUS = 0.24
 const RIM_HEIGHT = 0.62
 const HEAD_RADIUS = 0.22
-/* The slot is a bowl cut from a slightly larger ball, so the head sits in it with a gap. */
-const SLOT_RADIUS = 0.25
-/* How many flat faces go round the body, and how many steps the bowl is cut in. */
-const SIDES = 20
-const SLOT_STEPS = 5
+/* The slot is a bowl cut from a larger ball, so the head sits in it with a gap all round. */
+const SLOT_RADIUS = 0.28
+/* How many faces go round the body, and how many steps the bowl is cut in. */
+const SIDES = 64
+const SLOT_STEPS = 16
+/* The plant on the head: a stalk, and one leaf on each side of its top. */
+const STALK_HEIGHT = 0.17
+const LEAF_LENGTH = 0.13
+const LEAF_WIDTH = 0.06
+const LEAF_THICKNESS = 0.012
+/* How far the leaves lift above level, in radians. */
+const LEAF_LIFT = 0.45
+const STALK_GREEN = 0x5aa846
+const LEAF_GREEN = 0x86e05a
 
 const turn = new THREE.Quaternion()
 const UP = new THREE.Vector3(0, 1, 0)
 
 /*
-  Paper-like: one flat tone per face, no gloss. It gives off a little of its
-  own colour so the figure stays light in the plaza's dim violet light.
+  Paper-like: smooth and matt, no gloss. It gives off a little of its own
+  colour so the figure stays light in the plaza's dim violet light.
 */
 function paper(color: number): THREE.MeshStandardMaterial {
   return new THREE.MeshStandardMaterial({
@@ -32,7 +41,6 @@ function paper(color: number): THREE.MeshStandardMaterial {
     emissive: color,
     emissiveIntensity: 0.45,
     roughness: 1,
-    flatShading: true,
   })
 }
 
@@ -60,19 +68,24 @@ function outline(): THREE.Vector2[] {
 /*
   The player's own body: a short, wide cylinder, flat on the bottom and a
   little narrower towards the top, with a bowl-shaped slot in the top and a
-  ball held in the slot for a head. There are no arms or legs.
+  ball held in the slot for a head. There are no arms or legs. A small plant
+  grows from the top of the head: a stalk with a leaf on each side.
 
   The head is fixed in its slot. It turns only as the player looks: left and
-  right with the body, up and down with the view.
+  right with the body, up and down with the view. The plant is part of the
+  head and turns with it.
 
   The game stays first person. The body is drawn where the player stands, so
   they see it when they look down, and the whole figure when a doorway shows
-  them themselves. The head is only drawn in views through portals, so the
-  player never looks down on the top of their own head.
+  them themselves. The head and its plant are only drawn in views through
+  portals, so the player never looks down on the top of their own head.
 */
 export class Avatar {
   readonly body: THREE.Mesh
   readonly head: THREE.Mesh
+  readonly stalk: THREE.Mesh
+  /* Left leaf, then right leaf. */
+  readonly leaves: THREE.Mesh[] = []
   private readonly group = new THREE.Group()
 
   constructor(
@@ -80,14 +93,37 @@ export class Avatar {
     private readonly player: PlayerController,
   ) {
     this.body = new THREE.Mesh(new THREE.LatheGeometry(outline(), SIDES), paper(0xffffff))
-    this.head = new THREE.Mesh(new THREE.IcosahedronGeometry(HEAD_RADIUS, 1), paper(palette.bone))
+    this.head = new THREE.Mesh(new THREE.SphereGeometry(HEAD_RADIUS, 48, 32), paper(palette.bone))
     this.head.position.y = RIM_HEIGHT + SLOT_RISE
-    this.head.layers.set(PORTAL_ONLY_LAYER)
+    this.group.add(this.body, this.head)
 
-    for (const mesh of [this.body, this.head]) {
+    // The plant is built in the head's own frame, growing from its top.
+    const stalkGeometry = new THREE.CylinderGeometry(0.007, 0.012, STALK_HEIGHT, 12)
+    this.stalk = new THREE.Mesh(stalkGeometry, paper(STALK_GREEN))
+    this.stalk.position.y = HEAD_RADIUS + STALK_HEIGHT / 2 - 0.005
+    this.head.add(this.stalk)
+
+    // A leaf is a flattened ball, stretched along its length, which runs out
+    // from the stalk along +X before it is turned to its side.
+    const leafGeometry = new THREE.SphereGeometry(0.5, 24, 16)
+      .scale(LEAF_LENGTH, LEAF_THICKNESS, LEAF_WIDTH)
+      .translate(LEAF_LENGTH / 2, 0, 0)
+    const leafMaterial = paper(LEAF_GREEN)
+    for (const side of [-1, 1]) {
+      const leaf = new THREE.Mesh(leafGeometry, leafMaterial)
+      leaf.position.y = HEAD_RADIUS + STALK_HEIGHT - 0.012
+      // Point away from the stalk on its own side, tipped up a little.
+      leaf.rotation.set(0, side < 0 ? Math.PI : 0, LEAF_LIFT, 'YXZ')
+      this.leaves.push(leaf)
+      this.head.add(leaf)
+    }
+
+    this.group.traverse((object) => {
       // The stored bounds are not where a mesh on the planet is drawn.
-      mesh.frustumCulled = false
-      this.group.add(mesh)
+      object.frustumCulled = false
+    })
+    for (const mesh of [this.head, this.stalk, ...this.leaves]) {
+      mesh.layers.set(PORTAL_ONLY_LAYER)
     }
     scene.add(this.group)
   }

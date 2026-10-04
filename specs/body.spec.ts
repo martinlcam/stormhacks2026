@@ -37,7 +37,7 @@ describe("Feature: the player's body", () => {
     })
 
     it('Then it is short: with its head, about half as tall as the space the player takes up', () => {
-      const radius = (avatar.head.geometry as THREE.IcosahedronGeometry).parameters.radius
+      const radius = (avatar.head.geometry as THREE.SphereGeometry).parameters.radius
 
       expect(avatar.head.position.y + radius).toBeLessThan(1)
       expect(rim).toBeLessThan(0.7)
@@ -49,7 +49,7 @@ describe("Feature: the player's body", () => {
 
     it('Then a ball sits in the hollow: lower than the rim, clear of the bottom of the hollow, and narrower than the body at the ground', () => {
       const head = avatar.head
-      const radius = (head.geometry as THREE.IcosahedronGeometry).parameters.radius
+      const radius = (head.geometry as THREE.SphereGeometry).parameters.radius
 
       expect(head.position.y - radius).toBeLessThan(rim)
       expect(head.position.y - radius).toBeGreaterThan(slotFloor)
@@ -57,15 +57,96 @@ describe("Feature: the player's body", () => {
       expect(radius).toBeLessThan(widestAt(0))
     })
 
-    it('Then it has no arms or legs: a body and a head, and nothing else', () => {
+    it('Then it has no arms or legs: a body, a head and the plant on the head, and nothing else', () => {
       const meshes: THREE.Object3D[] = []
       scene.traverse((object) => {
         if ((object as THREE.Mesh).isMesh) meshes.push(object)
       })
 
-      expect(meshes).toHaveLength(2)
-      expect(meshes).toContain(avatar.body)
-      expect(meshes).toContain(avatar.head)
+      expect(meshes).toHaveLength(5)
+      for (const part of [avatar.body, avatar.head, avatar.stalk, ...avatar.leaves]) {
+        expect(meshes).toContain(part)
+      }
+    })
+
+    it('Then there is clear space between the head and the slot it sits in', () => {
+      const radius = (avatar.head.geometry as THREE.SphereGeometry).parameters.radius
+
+      expect(avatar.head.position.y - radius - slotFloor).toBeGreaterThan(0.05)
+    })
+
+    it('Then it is smooth: finely divided round the body and over the head', () => {
+      const count = (mesh: THREE.Mesh) => mesh.geometry.getAttribute('position').count
+
+      expect(count(avatar.body)).toBeGreaterThan(1000)
+      expect(count(avatar.head)).toBeGreaterThan(1000)
+      expect((avatar.body.material as THREE.MeshStandardMaterial).flatShading).toBe(false)
+    })
+  })
+
+  describe('Scenario: the plant on its head', () => {
+    /* The lowest and highest points of a part, and its middle, in the head's frame. */
+    const extent = (mesh: THREE.Mesh) => {
+      mesh.updateMatrix()
+      const box = new THREE.Box3()
+      const position = mesh.geometry.getAttribute('position')
+      const point = new THREE.Vector3()
+      for (let i = 0; i < position.count; i++) {
+        box.expandByPoint(point.fromBufferAttribute(position, i).applyMatrix4(mesh.matrix))
+      }
+      return { box, middle: box.getCenter(new THREE.Vector3()) }
+    }
+    const headTop = (avatar.head.geometry as THREE.SphereGeometry).parameters.radius
+
+    it('Given the head, then a thin stalk grows straight up from the top of it', () => {
+      const { box, middle } = extent(avatar.stalk)
+
+      expect(box.min.y).toBeLessThanOrEqual(headTop)
+      expect(box.max.y).toBeGreaterThan(headTop + 0.1)
+      expect(Math.hypot(middle.x, middle.z)).toBeCloseTo(0, 6)
+      expect(box.max.x - box.min.x).toBeLessThan(0.03)
+    })
+
+    it('Then it has two leaves, one on each side of the stalk, near its top', () => {
+      expect(avatar.leaves).toHaveLength(2)
+      const [left, right] = avatar.leaves.map(extent)
+      const stalkTop = extent(avatar.stalk).box.max.y
+
+      expect(left.middle.x).toBeLessThan(-0.03)
+      expect(right.middle.x).toBeGreaterThan(0.03)
+      expect(left.middle.x).toBeCloseTo(-right.middle.x, 6)
+      for (const leaf of [left, right]) {
+        expect(leaf.middle.z).toBeCloseTo(0, 6)
+        expect(leaf.box.min.y).toBeGreaterThan(headTop + 0.1)
+        expect(Math.abs(leaf.box.min.y - stalkTop)).toBeLessThan(0.05)
+      }
+    })
+
+    it('Then the leaves are flat: far longer and wider than they are thick', () => {
+      const geometry = avatar.leaves[0].geometry
+      geometry.computeBoundingBox()
+      const size = geometry.boundingBox!.getSize(new THREE.Vector3())
+
+      expect(size.x).toBeGreaterThan(size.y * 5)
+      expect(size.z).toBeGreaterThan(size.y * 3)
+    })
+
+    it('Given I look up, then the plant tips back with the head', () => {
+      player.position.set(0, 0, 0)
+      player.yaw = 0
+      player.pitch = 0
+      avatar.update()
+      scene.updateMatrixWorld(true)
+      const level = avatar.stalk.getWorldPosition(new THREE.Vector3())
+
+      player.pitch = 0.6
+      avatar.update()
+      scene.updateMatrixWorld(true)
+      const tipped = avatar.stalk.getWorldPosition(new THREE.Vector3())
+
+      // Facing -Z and looking up, the top of the head goes back, towards +Z.
+      expect(tipped.z).toBeGreaterThan(level.z + 0.1)
+      player.pitch = 0
     })
   })
 
@@ -75,8 +156,10 @@ describe("Feature: the player's body", () => {
       const throughDoor = new THREE.PerspectiveCamera()
       throughDoor.layers.enable(PORTAL_ONLY_LAYER)
 
-      expect(avatar.head.layers.test(own.layers)).toBe(false)
-      expect(avatar.head.layers.test(throughDoor.layers)).toBe(true)
+      for (const part of [avatar.head, avatar.stalk, ...avatar.leaves]) {
+        expect(part.layers.test(own.layers)).toBe(false)
+        expect(part.layers.test(throughDoor.layers)).toBe(true)
+      }
       expect(avatar.body.layers.test(own.layers)).toBe(true)
     })
 
