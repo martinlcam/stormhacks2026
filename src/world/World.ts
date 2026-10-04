@@ -129,9 +129,12 @@ export class World {
       })
 
     const post = 0.15
-    // The frame straddles the portal plane: mostly behind, a lip in front.
+    // The whole frame sits just behind the portal plane. Nothing may reach
+    // the plane or stick out in front of it: the view through a portal keeps
+    // everything in front of the far door's plane, so a lip there shows up
+    // inside the doorway as a second frame peeling off the first.
     const depth = 0.15
-    const z = -0.025
+    const z = -depth / 2 - 0.005
     local(
       [post, height + post, depth],
       [-(width + post) / 2, (height + post) / 2, z],
