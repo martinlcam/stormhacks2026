@@ -1,5 +1,14 @@
 import * as THREE from 'three'
-import { materialAt, planetMaterial, planetUniforms, POLE, type Site, siteOf } from './planet'
+import {
+  drawnBounds,
+  materialAt,
+  planetMaterial,
+  planetUniforms,
+  POLE,
+  type Site,
+  siteOf,
+  siteUniform,
+} from './planet'
 import type { Portal } from './Portal'
 import type { PortalLighting } from './PortalLighting'
 
@@ -107,6 +116,17 @@ export class PortalRenderer {
   private readonly worldMaterials = new Set<THREE.Material>()
   /* Meshes whose materials have been pointed at their site. */
   private readonly sited = new WeakSet<THREE.Object3D>()
+  /*
+    Meshes that each view leaves out when they are not in it, and where each
+    is drawn this frame. Three's own culling is off for the world, since it
+    uses bounds from before the planet bends them.
+  */
+  private readonly cullable: THREE.Mesh[] = []
+  private readonly bounds: THREE.Sphere[] = []
+  private readonly origin = new THREE.Vector3()
+  private readonly viewFrustum = new THREE.Frustum()
+  private readonly windowMatrix = new THREE.Matrix4()
+  private readonly size = new THREE.Vector2()
   private portals: readonly Portal[] = []
 
   constructor(private readonly renderer: THREE.WebGLRenderer) {
@@ -133,8 +153,21 @@ export class PortalRenderer {
     this.passes = 0
     this.portalLighting?.update()
     this.collectMaterials(scene)
+    // Nothing moves between passes, so place everything once rather than once a pass.
+    scene.updateMatrixWorld()
+    const autoUpdate = scene.matrixWorldAutoUpdate
+    scene.matrixWorldAutoUpdate = false
+    this.measure(scene)
+    this.renderer.setScissorTest(false)
     this.renderer.clear(true, true, true)
-    this.renderLevel(scene, camera, 0, null, up, this.maxPasses, 0, WHOLE_SCREEN)
+
+    try {
+      this.renderLevel(scene, camera, 0, null, up, this.maxPasses, 0, WHOLE_SCREEN)
+    } finally {
+      scene.matrixWorldAutoUpdate = autoUpdate
+      this.renderer.setScissorTest(false)
+      for (const mesh of this.cullable) mesh.visible = true
+    }
   }
 
   private renderLevel(
@@ -174,6 +207,7 @@ export class PortalRenderer {
       const childAllowance = share + (i === visible.length - 1 ? spare - share * looked : 0)
       {
         // 1. mark
+        this.scissor(window)
         this.clipPlane.copy(clip)
         this.maskMaterial.stencilRef = level
         this.maskMaterial.stencilFunc = THREE.EqualStencilFunc
@@ -199,6 +233,7 @@ export class PortalRenderer {
         )
 
         // 3. unmark
+        this.scissor(window)
         this.clipPlane.copy(clip)
         this.maskMaterial.stencilRef = level + 1
         this.maskMaterial.stencilZPass = THREE.DecrementStencilOp
@@ -207,6 +242,7 @@ export class PortalRenderer {
     }
 
     // 4. seal
+    this.scissor(window)
     this.clipPlane.copy(clip)
     this.renderer.state.buffers.depth.setMask(true)
     this.renderer.clearDepth()
@@ -217,6 +253,7 @@ export class PortalRenderer {
     planetUniforms.uSkyUp.value.copy(up)
     this.portalLighting?.prepareCamera(camera)
     this.beforePass?.(doors)
+    this.cull(camera, window, clip)
     this.renderer.render(scene, camera)
     this.passes++
 
@@ -240,6 +277,74 @@ export class PortalRenderer {
     }
     this.renderer.render(this.portalScene, camera)
     for (const portal of portals) portal.mesh.visible = false
+  }
+
+  /* Draw only inside this part of the screen. */
+  private scissor(rect: Rect) {
+    if (rect === WHOLE_SCREEN) {
+      this.renderer.setScissorTest(false)
+      return
+    }
+
+    const { x: width, y: height } = this.renderer.getSize(this.size)
+    const left = Math.floor(((rect.minX + 1) / 2) * width)
+    const bottom = Math.floor(((rect.minY + 1) / 2) * height)
+    const right = Math.ceil(((rect.maxX + 1) / 2) * width)
+    const top = Math.ceil(((rect.maxY + 1) / 2) * height)
+    this.renderer.setScissor(left, bottom, right - left, top - bottom)
+    this.renderer.setScissorTest(true)
+  }
+
+  /*
+    Find the meshes that can be left out of a view, and where each is drawn.
+    Always drawn are meshes with others attached, rigid things, which keep
+    their shape as they go round the planet, and anything with its own shader.
+  */
+  private measure(scene: THREE.Scene) {
+    this.cullable.length = 0
+    scene.traverseVisible((object) => {
+      const mesh = object as THREE.Mesh
+      if (!mesh.isMesh || mesh.children.length > 0) return
+      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+      for (const material of materials) {
+        if ((material as THREE.ShaderMaterial).isShaderMaterial || material.userData.rigid) return
+      }
+
+      const geometry = mesh.geometry
+      if (!geometry.boundingSphere) geometry.computeBoundingSphere()
+      const i = this.cullable.length
+      const sphere = (this.bounds[i] ??= new THREE.Sphere())
+      sphere.copy(geometry.boundingSphere!).applyMatrix4(mesh.matrixWorld)
+      this.origin.setFromMatrixPosition(mesh.matrixWorld)
+      drawnBounds(sphere, this.origin, siteUniform(materials[0]).value)
+      this.cullable.push(mesh)
+    })
+  }
+
+  /*
+    Show only the meshes this view can see: those in front of the camera,
+    inside the doorway it looks through and on the near side of its exit.
+  */
+  private cull(camera: THREE.PerspectiveCamera, window: Rect, clip: THREE.Plane) {
+    // Stretch the doorway's rectangle to the whole screen, so the frustum ends at its edges.
+    const scaleX = 2 / (window.maxX - window.minX)
+    const scaleY = 2 / (window.maxY - window.minY)
+    const middleX = (window.minX + window.maxX) / 2
+    const middleY = (window.minY + window.maxY) / 2
+    this.windowMatrix
+      .makeScale(scaleX, scaleY, 1)
+      .setPosition(-scaleX * middleX, -scaleY * middleY, 0)
+    this.viewProjection
+      .multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)
+      .premultiply(this.windowMatrix)
+    this.viewFrustum.setFromProjectionMatrix(this.viewProjection)
+
+    for (let i = 0; i < this.cullable.length; i++) {
+      const sphere = this.bounds[i]
+      this.cullable[i].visible =
+        clip.distanceToPoint(sphere.center) >= -sphere.radius &&
+        this.viewFrustum.intersectsSphere(sphere)
+    }
   }
 
   /*
