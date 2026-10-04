@@ -23,4 +23,3 @@
 - Add the surveyor story, and a different colour and landmark for each district.
 - Add sound.
 - Write the documentation.
-- Show a credit for the ivy model on the page: "Ivy" by dangry, Sketchfab, CC Attribution.

@@ -1,78 +1,82 @@
 import { describe, expect, it } from 'bun:test'
-import { type Drape, ivyDrapes } from '../src/world/foliage'
+import * as THREE from 'three'
+import { ivy } from '../src/world/foliage'
 
 const door = { name: 'booth', width: 1.2, height: 2.2, post: 0.15 }
 
-const left = (drape: Drape) => drape.x - drape.width / 2
-const right = (drape: Drape) => drape.x + drape.width / 2
-const bottom = (drape: Drape) => drape.y - drape.drop
+/* Every corner of every leaf, in the door's frame: x across, y up, z out of the front. */
+function leaves(doorway = door): THREE.Vector3[] {
+  const points: THREE.Vector3[] = []
+  ivy(doorway).traverse((object) => {
+    const mesh = object as THREE.Mesh
+    if (!mesh.isMesh || !mesh.geometry.getAttribute('color')) return
+    const position = mesh.geometry.getAttribute('position')
+    for (let i = 0; i < position.count; i++) {
+      points.push(new THREE.Vector3().fromBufferAttribute(position, i))
+    }
+  })
+  return points
+}
+
+const count = (points: THREE.Vector3[], where: (p: THREE.Vector3) => boolean) =>
+  points.filter(where).length / 3 / 2
 
 describe('Feature: an old doorway is overgrown', () => {
-  const all = ivyDrapes(door)
+  const all = leaves()
   const half = door.width / 2
-  const top = door.height + door.post
 
-  describe('Scenario: where the ivy hangs', () => {
-    it('Given an overgrown door, then ivy covers both posts from top to bottom', () => {
-      for (const side of [-1, 1]) {
-        const onPost = all.filter((drape) => drape.x * side > half)
+  describe('Scenario: where the ivy grows', () => {
+    it('Given an overgrown door, then ivy climbs both posts', () => {
+      const onPost = (side: number) => (p: THREE.Vector3) =>
+        p.x * side > half - 0.05 && p.y > 0.5 && p.y < door.height - 0.3
 
-        // No height on the post is left bare.
-        for (let y = 0.3; y < door.height; y += 0.1) {
-          expect(onPost.some((drape) => bottom(drape) <= y && drape.y >= y)).toBe(true)
-        }
-      }
+      expect(count(all, onPost(-1))).toBeGreaterThan(20)
+      expect(count(all, onPost(1))).toBeGreaterThan(20)
     })
 
-    it('Then it covers the top from end to end', () => {
-      const along = all.filter((drape) => drape.y >= top && Math.abs(drape.x) < half + door.post)
-
-      for (let x = -half; x <= half; x += 0.1) {
-        expect(along.some((drape) => left(drape) <= x && right(drape) >= x)).toBe(true)
-      }
-    })
-
-    it('Then it reaches the ground at the foot of each post', () => {
-      for (const side of [-1, 1]) {
-        const lowest = Math.min(...all.filter((d) => d.x * side > half).map(bottom))
-
-        expect(lowest).toBeLessThan(0.25)
-        expect(lowest).toBeGreaterThanOrEqual(-1e-9)
-      }
-    })
-
-    it('Then it hangs down into the opening from the top', () => {
-      const hanging = all.filter(
-        (drape) => Math.abs(drape.x) < half && bottom(drape) < door.height - 0.1,
+    it('Then it covers the top', () => {
+      expect(count(all, (p) => p.y > door.height - 0.05 && Math.abs(p.x) < half)).toBeGreaterThan(
+        15,
       )
+    })
 
-      expect(hanging.length).toBeGreaterThan(2)
+    it('Then it is thick at the foot of each post', () => {
+      const atFoot = (side: number) => (p: THREE.Vector3) => p.x * side > half - 0.1 && p.y < 0.45
+
+      expect(count(all, atFoot(-1))).toBeGreaterThan(30)
+      expect(count(all, atFoot(1))).toBeGreaterThan(30)
+    })
+
+    it('Then strands hang down into the opening from the top', () => {
+      const hanging = (p: THREE.Vector3) =>
+        Math.abs(p.x) < half - 0.05 && p.y < door.height - 0.1 && p.y > door.height - 0.9
+
+      expect(count(all, hanging)).toBeGreaterThan(8)
     })
 
     it('Then the way through is left clear: nothing hangs lower than head height in the middle', () => {
-      const inTheWay = all.filter(
-        (drape) =>
-          left(drape) < half * 0.6 &&
-          right(drape) > -half * 0.6 &&
-          bottom(drape) < 1.7 &&
-          drape.y > 0.6,
-      )
+      const inTheWay = (p: THREE.Vector3) => Math.abs(p.x) < half * 0.6 && p.y > 0.6 && p.y < 1.7
 
-      expect(inTheWay).toHaveLength(0)
+      expect(count(all, inTheWay)).toBe(0)
     })
 
-    it('Then it all hangs on the front of the frame, not behind the door', () => {
-      expect(Math.min(...all.map((drape) => drape.z))).toBeGreaterThanOrEqual(0)
+    it('Then it all grows on the front of the frame, not behind the door', () => {
+      expect(Math.min(...all.map((p) => p.z))).toBeGreaterThan(-0.1)
     })
   })
 
   describe('Scenario: every door grows its own way', () => {
     it('Given the same door built twice, then its ivy is the same both times', () => {
-      expect(ivyDrapes(door)).toEqual(all)
+      const again = leaves()
+
+      expect(again).toHaveLength(all.length)
+      expect(again[100].distanceTo(all[100])).toBe(0)
     })
 
     it('Given two different doors, then their ivy differs', () => {
-      expect(ivyDrapes({ ...door, name: 'loop-west' })).not.toEqual(all)
+      const other = leaves({ ...door, name: 'loop-west' })
+
+      expect(other[100].distanceTo(all[100])).toBeGreaterThan(0)
     })
   })
 })

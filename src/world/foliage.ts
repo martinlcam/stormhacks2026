@@ -10,8 +10,9 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
     wood     "Rough Wood" texture, Poly Haven, CC0 (Rob Tuytel)
     ferns    "Fern 02" model, Poly Haven, CC0 (Rob Tuytel, Rico Cilliers)
     sorrel   "Shrub Sorrel 01" model, Poly Haven, CC0 (Rico Cilliers)
-    ivy      "Ivy" model by dangry, Sketchfab, CC Attribution, hung in
-             curtains along the top, from the corners and down the posts
+    ivy      photographed leaves from "Leaf Set 017", ambientCG, CC0, set
+             on stems that are grown here: up the posts, along the top and
+             hanging down into the opening
 
   The files are in public/textures and public/models.
 */
@@ -72,9 +73,131 @@ function seeded(text: string): () => number {
   }
 }
 
-/* False outside a browser, where there are no models to load and nothing is drawn. */
-function canLoadModels(): boolean {
+/*
+  Where each of the six leaves is on the ivy leaf image, as [left, top,
+  right, bottom] in pixels of the 1024 square. Every leaf has its stalk at
+  the bottom and its tip at the top.
+*/
+const LEAF_CELLS = [
+  [45, 12, 395, 335],
+  [630, 50, 900, 325],
+  [60, 375, 420, 695],
+  [635, 400, 935, 655],
+  [40, 705, 445, 1012],
+  [600, 705, 925, 1005],
+]
+const ATLAS = 1024
+
+const turn = new THREE.Quaternion()
+const lean = new THREE.Euler()
+const corner = new THREE.Vector3()
+
+interface Growth {
+  leaves: number[]
+  uvs: number[]
+  colours: number[]
+  stems: THREE.BufferGeometry[]
+}
+
+/*
+  One leaf at a point: a flat card showing one of the photographed leaves,
+  stalk at the point, roughly flat against the door's front, turned and
+  tipped at random. `size` is its length from stalk to tip.
+*/
+function addLeaf(
+  growth: Growth,
+  at: THREE.Vector3,
+  size: number,
+  random: () => number,
+  shade: number,
+) {
+  const [left, top, right, bottom] = LEAF_CELLS[Math.floor(random() * LEAF_CELLS.length)]
+  const half = (size * (right - left)) / (bottom - top) / 2
+  lean.set((random() - 0.5) * 1.3, (random() - 0.5) * 1.3, random() * Math.PI * 2)
+  turn.setFromEuler(lean)
+  // Each leaf is a little lighter or darker than the next.
+  const light = shade * (0.8 + random() * 0.35)
+
+  // Two triangles. Image rows count down from the top; v counts up from the bottom.
+  const card = [
+    [-half, 0, left, bottom],
+    [half, 0, right, bottom],
+    [half, size, right, top],
+    [-half, size, left, top],
+  ]
+  for (const index of [0, 1, 2, 0, 2, 3]) {
+    const [x, y, px, py] = card[index]
+    corner.set(x, y, 0).applyQuaternion(turn).add(at)
+    growth.leaves.push(corner.x, corner.y, corner.z)
+    growth.uvs.push(px / ATLAS, 1 - py / ATLAS)
+    // The photographs are pale; bring them towards a deeper green.
+    growth.colours.push(light * 0.82, light, light * 0.7)
+  }
+}
+
+/* False outside a browser, where there are no images to load and nothing is drawn. */
+function canLoadImages(): boolean {
   return typeof document !== 'undefined' && typeof document.createElementNS === 'function'
+}
+
+let leafMaterial: THREE.MeshStandardMaterial | undefined
+let stemMaterial: THREE.MeshStandardMaterial | undefined
+
+/* Photographed ivy leaves: "Leaf Set 017" from ambientCG, CC0. */
+function ivyLeafMaterial(): THREE.MeshStandardMaterial {
+  if (leafMaterial) return leafMaterial
+  leafMaterial = new THREE.MeshStandardMaterial({
+    vertexColors: true,
+    side: THREE.DoubleSide,
+    roughness: 0.7,
+  })
+  if (canLoadImages()) {
+    const load = (file: string) =>
+      new THREE.TextureLoader().load(assets(`textures/ivy_leaves/${file}`))
+    leafMaterial.map = load('colour.jpg')
+    leafMaterial.map.colorSpace = THREE.SRGBColorSpace
+    leafMaterial.map.anisotropy = 8
+    leafMaterial.alphaMap = load('opacity.jpg')
+    leafMaterial.normalMap = load('normal.jpg')
+    // Cut the leaf's outline out of its card.
+    leafMaterial.alphaTest = 0.5
+  }
+  return leafMaterial
+}
+
+/* Woody stems, using the same aged timber as the frame. */
+function ivyStemMaterial(): THREE.MeshStandardMaterial {
+  if (stemMaterial) return stemMaterial
+  stemMaterial = new THREE.MeshStandardMaterial({ color: 0x8a7458, roughness: 1 })
+  if (canLoadImages()) {
+    const bark = woodMaterial().map!.clone()
+    // A tube's UVs run 0 to 1 along it and round it.
+    bark.repeat.set(6, 1)
+    bark.needsUpdate = true
+    stemMaterial.map = bark
+  }
+  return stemMaterial
+}
+
+/* A stem through some points, with leaves along it. */
+function addVine(
+  growth: Growth,
+  points: THREE.Vector3[],
+  random: () => number,
+  options: { spacing: number; leaf: number; spread: number; shade?: number },
+) {
+  const curve = new THREE.CatmullRomCurve3(points)
+  const length = curve.getLength()
+  growth.stems.push(new THREE.TubeGeometry(curve, Math.max(4, Math.ceil(length / 0.08)), 0.008, 6))
+  const count = Math.max(2, Math.floor(length / options.spacing))
+  const at = new THREE.Vector3()
+  for (let i = 0; i <= count; i++) {
+    curve.getPointAt(Math.min(1, (i + random() * 0.6) / count), at)
+    at.x += (random() - 0.5) * options.spread
+    at.y += (random() - 0.5) * options.spread
+    at.z += random() * 0.03
+    addLeaf(growth, at, options.leaf * (0.6 + random() * 0.7), random, options.shade ?? 1)
+  }
 }
 
 export interface Doorway {
@@ -87,164 +210,93 @@ export interface Doorway {
 }
 
 /*
-  One curtain of ivy, hung by the middle of its top edge. It hangs `drop`
-  below that point and stands out of the front of the door.
+  Ivy for a doorway, in the door's own frame: x across the opening, y up
+  from the threshold, z out of the front. It climbs both posts, thickest at
+  the foot and at the top corners, runs along the top, and hangs down into
+  the opening in strands.
 */
-export interface Drape {
-  x: number
-  y: number
-  z: number
-  width: number
-  drop: number
-  /* A turn about the vertical, so no two curtains line up. */
-  turn: number
-  mirrored: boolean
-}
-
-/* How far a curtain hangs, for each metre of its width, when it is not stretched. */
-const IVY_DROP = 1.18
-
-/*
-  Where ivy hangs on a doorway, in the door's own frame: x across the
-  opening, y up from the threshold, z out of the front. Short curtains hang
-  along the top and a little way into the opening; a long one hangs from
-  each top corner; more hang one below another down each post to the ground.
-*/
-export function ivyDrapes({ name, width, height, post }: Doorway): Drape[] {
+export function ivy({ name, width, height, post }: Doorway): THREE.Group {
   const random = seeded(name)
-  const between = (a: number, b: number) => a + (b - a) * random()
+  const growth: Growth = { leaves: [], uvs: [], colours: [], stems: [] }
   const half = width / 2
-  const top = height + post
-  const drapes: Drape[] = []
-  /* `stretch` pulls a curtain longer than it is made, to trail down a post. */
-  const hang = (x: number, y: number, size: number, stretch = 1) => {
-    drapes.push({
-      x,
-      y,
-      z: between(0, 0.03),
-      width: size,
-      drop: Math.min(size * IVY_DROP * stretch, y),
-      turn: between(-0.25, 0.25),
-      mirrored: random() < 0.5,
-    })
-  }
-  // Beside the opening, a curtain keeps this far out, so the way through stays clear.
-  const beside = (size: number) =>
-    Math.max(half + post / 2 + between(0, 0.08), half * 0.7 + size / 2)
+  const front = 0.012
+  const between = (a: number, b: number) => a + (b - a) * random()
 
-  // Along the top. These are short, so they only fringe the opening.
-  const across = Math.max(2, Math.round((width + post * 2) / 0.32))
-  for (let i = 0; i < across; i++) {
-    const x = -half - post + ((i + between(0.3, 0.7)) / across) * (width + post * 2)
-    hang(x, top + between(0, 0.04), Math.min(between(0.32, 0.44), height * 0.2))
-  }
-
+  // Up each post, wandering across its face, and round onto the top.
   for (const side of [-1, 1]) {
-    // From each top corner.
-    const corner = between(0.55, 0.7)
-    hang(side * beside(corner), top + between(0, 0.04), corner, between(1.2, 1.5))
+    for (let strand = 0; strand < 3; strand++) {
+      const reach = strand === 0 ? height + post * 0.6 : between(height * 0.35, height * 0.95)
+      const points: THREE.Vector3[] = []
+      for (let y = 0; y <= reach; y += 0.22) {
+        const x = side * (half + between(0.01, post - 0.01))
+        points.push(new THREE.Vector3(x, y, front + random() * 0.01))
+      }
+      if (strand === 0) {
+        // The longest strand turns the corner and creeps along the top.
+        const along = between(width * 0.25, width * 0.6)
+        for (let x = half; x >= half - along; x -= 0.2) {
+          points.push(new THREE.Vector3(side * x, height + between(0.02, post - 0.02), front))
+        }
+      }
+      addVine(growth, points, random, { spacing: 0.05, leaf: 0.085, spread: 0.07 })
+    }
 
-    // Down the post, each curtain starting well inside the one above.
-    for (let y = top - between(0.25, 0.4); y > 0.35; y -= between(0.28, 0.42)) {
-      const size = between(0.4, 0.54)
-      hang(side * beside(size), y, size, between(1.3, 1.8))
+    // Thick at the foot of each post, spilling onto the ground and outwards.
+    const foot = new THREE.Vector3()
+    for (let i = 0; i < 46; i++) {
+      foot.set(
+        side * (half + between(-0.06, post + 0.22)),
+        Math.abs(between(-0.02, 0.42)) * (1 - random() * random()),
+        front + between(0, 0.16),
+      )
+      addLeaf(growth, foot, between(0.06, 0.11), random, between(0.75, 1))
+    }
+
+    // And thick in each top corner.
+    const top = new THREE.Vector3()
+    for (let i = 0; i < 34; i++) {
+      top.set(
+        side * (half + between(-0.18, post + 0.05)),
+        height + between(-0.2, post + 0.08),
+        front + between(0, 0.07),
+      )
+      addLeaf(growth, top, between(0.06, 0.1), random, 1)
     }
   }
-  return drapes
-}
 
-interface IvyModel {
-  /* One geometry for each material, a metre wide, hung from the origin. */
-  parts: { geometry: THREE.BufferGeometry; material: THREE.Material }[]
-}
+  // Along the top, with strands hanging down into the opening.
+  const lintel: THREE.Vector3[] = []
+  for (let x = -half - post; x <= half + post + 0.001; x += 0.2) {
+    lintel.push(new THREE.Vector3(x, height + between(0.03, post - 0.02), front))
+  }
+  addVine(growth, lintel, random, { spacing: 0.04, leaf: 0.09, spread: 0.1 })
 
-let ivyModel: Promise<IvyModel> | undefined
-
-/*
-  The ivy curtain: "Ivy" by dangry, from Sketchfab
-  (sketchfab.com/3d-models/ivy-d8991bd2a8c84e96b15a721a833bd4c3), licensed
-  CC Attribution. It is re-based here to hang from the origin, one metre
-  wide, with its back at z = 0.
-*/
-function loadIvy(): Promise<IvyModel> {
-  ivyModel ??= loader.loadAsync(assets('models/ivy/ivy.glb')).then((gltf) => {
-    gltf.scene.updateMatrixWorld(true)
-    const parts: IvyModel['parts'] = []
-    const bounds = new THREE.Box3()
-    gltf.scene.traverse((object) => {
-      const mesh = object as THREE.Mesh
-      if (!mesh.isMesh) return
-      const geometry = mesh.geometry.clone().applyMatrix4(mesh.matrixWorld)
-      geometry.computeBoundingBox()
-      bounds.union(geometry.boundingBox!)
-      const material = mesh.material as THREE.MeshStandardMaterial
-      // Cut the leaves out rather than blend them, so they hide what is behind.
-      material.transparent = false
-      material.alphaTest = 0.4
-      material.depthWrite = true
-      material.roughness = 0.75
-      // The leaves are photographed dark; lift them to sit with the ferns.
-      material.color.setScalar(1.6)
-      parts.push({ geometry, material })
-    })
-    const size = 1 / (bounds.max.x - bounds.min.x)
-    const rebase = new THREE.Matrix4()
-      .makeScale(size, size, size)
-      .multiply(
-        new THREE.Matrix4().makeTranslation(
-          -(bounds.min.x + bounds.max.x) / 2,
-          -bounds.max.y,
-          -bounds.min.z,
+  const strands = 5 + Math.floor(random() * 3)
+  for (let i = 0; i < strands; i++) {
+    const x = between(-half, half)
+    // Longest near the corners, shortest in the middle, so the way through stays clear.
+    const drop = between(0.12, 0.3) + 0.5 * Math.abs(x / half) ** 2 * random()
+    const sway = between(-0.05, 0.05)
+    const points = [0, 0.35, 0.7, 1].map(
+      (t) =>
+        new THREE.Vector3(
+          x + sway * t * t,
+          height + post * 0.4 - (drop + post * 0.4) * t,
+          front + 0.02,
         ),
-      )
-    for (const part of parts) part.geometry.applyMatrix4(rebase)
-    return { parts }
-  })
-  return ivyModel
-}
-
-/* A copy of a geometry, hung where a drape is. */
-function hung(geometry: THREE.BufferGeometry, drape: Drape): THREE.BufferGeometry {
-  const copy = geometry.clone()
-  if (drape.mirrored) {
-    copy.scale(-1, 1, 1)
-    // Mirroring turns every triangle inside out; turn them back.
-    const index = copy.getIndex()!
-    for (let i = 0; i < index.count; i += 3) {
-      const a = index.getX(i)
-      index.setX(i, index.getX(i + 2))
-      index.setX(i + 2, a)
-    }
+    )
+    addVine(growth, points, random, { spacing: 0.055, leaf: 0.075, spread: 0.035 })
   }
-  copy.rotateY(drape.turn)
-  // Turning swings one edge backwards; keep the whole curtain in front of the frame.
-  copy.computeBoundingBox()
-  const back = Math.min(0, copy.boundingBox!.min.z)
-  copy.translate(0, 0, -back)
-  copy.scale(drape.width, drape.drop / IVY_DROP, drape.width)
-  copy.translate(drape.x, drape.y, drape.z)
-  return copy
-}
 
-/*
-  Ivy for a doorway, as a group in the door's own frame. The model arrives
-  later than the door is built; the group is filled when it does.
-*/
-export function ivy(doorway: Doorway): THREE.Group {
+  const leafGeometry = new THREE.BufferGeometry()
+  leafGeometry.setAttribute('position', new THREE.Float32BufferAttribute(growth.leaves, 3))
+  leafGeometry.setAttribute('uv', new THREE.Float32BufferAttribute(growth.uvs, 2))
+  leafGeometry.setAttribute('color', new THREE.Float32BufferAttribute(growth.colours, 3))
+  leafGeometry.computeVertexNormals()
+  const leaves = new THREE.Mesh(leafGeometry, ivyLeafMaterial())
+  const stems = new THREE.Mesh(mergeGeometries(growth.stems), ivyStemMaterial())
   const group = new THREE.Group()
-  const drapes = ivyDrapes(doorway)
-  if (!canLoadModels()) return group
-  void loadIvy().then(({ parts }) => {
-    for (const { geometry, material } of parts) {
-      const mesh = new THREE.Mesh(
-        mergeGeometries(drapes.map((drape) => hung(geometry, drape))),
-        material,
-      )
-      // The stored bounds are not where a mesh on the planet is drawn.
-      mesh.frustumCulled = false
-      group.add(mesh)
-    }
-  })
+  group.add(stems, leaves)
   return group
 }
 
