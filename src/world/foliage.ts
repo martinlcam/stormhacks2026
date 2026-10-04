@@ -84,6 +84,15 @@ function plants(name: string): Promise<THREE.Object3D[]> {
   return loading
 }
 
+/* Start loading everything in this file that comes from a file. The results are kept. */
+export function preloadFoliage() {
+  woodMaterial()
+  stoneMaterial()
+  ivyLeafMaterial()
+  void plants('fern_02')
+  void plants('shrub_sorrel_01')
+}
+
 /* A repeatable stream of numbers from 0 to 1, so a door always grows the same way. */
 function seeded(text: string): () => number {
   let state = 2166136261

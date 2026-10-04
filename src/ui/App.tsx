@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { bootstrap } from '../game/bootstrap'
 import { readLightingScene, readLightingView } from '../game/lightingScenes'
 import { Landing } from '../landing/Landing'
+import { preloadAssets } from '../world/preload'
 import { Hud } from './Hud'
 import { LightingLabPanel } from './LightingLabPanel'
 
@@ -11,6 +12,14 @@ const lightingView = readLightingView(window.location.search)
 export function App() {
   // The landing page comes first. `#play` in the address goes straight to the game.
   const [entered, setEntered] = useState(() => Boolean(lightingScene) || location.hash === '#play')
+
+  // While the reader is on the landing page, fetch what the game will need.
+  // Wait a moment first, so the landing page itself is not slowed down.
+  useEffect(() => {
+    if (entered) return
+    const timer = setTimeout(preloadAssets, 1500)
+    return () => clearTimeout(timer)
+  }, [entered])
 
   return entered ? <Game /> : <Landing onEnter={() => setEntered(true)} />
 }
