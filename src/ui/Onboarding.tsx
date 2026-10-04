@@ -15,9 +15,9 @@ const FADE = 0.8
 type Phase = 'showing' | 'fading' | 'gone'
 
 /*
-  The controls, in the top left, for a player who has just come in. Each is
-  ticked off the first time it is used, and once all of them are, the panel
-  fades away and does not come back.
+  The controls, in the top left under the score, for a player who has just
+  come in. Each is ticked off the first time it is used, and once all of
+  them are, the panel fades away and does not come back.
 */
 export function Onboarding() {
   const playing = useGame((s) => s.playing)
@@ -38,7 +38,7 @@ export function Onboarding() {
   if (phase === 'gone' || !playing) return null
   return (
     <div
-      className={`pointer-events-none absolute top-3 left-4 w-72 rounded-2xl border border-bone/15 bg-night/70 p-4 text-sm text-bone/90 backdrop-blur transition-opacity duration-1000 starting:opacity-0 ${
+      className={`pointer-events-none absolute top-24 left-4 w-72 rounded-2xl border border-bone/15 bg-night/70 p-4 text-sm text-bone/90 backdrop-blur transition-opacity duration-1000 starting:opacity-0 ${
         phase === 'fading' ? 'opacity-0' : 'opacity-100'
       }`}
     >

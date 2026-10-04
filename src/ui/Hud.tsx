@@ -87,7 +87,7 @@ function Ending({ phase, onContinue }: { phase: EndingPhase; onContinue: () => v
           WÚ 無
         </h1>
         <p className="text-xl font-semibold">Nothing left to find.</p>
-        <p className="font-mono text-sm tracking-widest text-purple uppercase">
+        <p className="text-sm tracking-widest text-purple uppercase tabular-nums">
           {found.length} / {TOTAL} points
         </p>
         <ul className="grid max-w-2xl grid-cols-1 gap-x-8 gap-y-1 text-sm text-night/70 sm:grid-cols-2">
@@ -129,7 +129,7 @@ function Points() {
   return (
     <div className="absolute top-3 left-4 rounded-2xl border border-bone/15 bg-night/75 px-4 py-2 backdrop-blur">
       <div className="text-[0.65rem] font-semibold tracking-widest text-cyan uppercase">Points</div>
-      <div className="font-mono text-2xl leading-tight font-bold">
+      <div className="text-2xl leading-tight font-bold tabular-nums">
         {/* Keyed by the score, so that each new point plays the pulse again. */}
         <span key={found} className={found > 0 ? 'inline-block animate-[point_0.6s_ease-out]' : ''}>
           {found}
