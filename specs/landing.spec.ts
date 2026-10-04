@@ -4,12 +4,17 @@ import { walk } from '../src/landing/speedraw'
 import {
   BLOOM_END,
   BLOOM_START,
+  DROP_TOP,
+  DROP_X,
   FALL_FRAMES,
+  GATHER,
   IMPACT_Y,
   SPLASH_FRAMES,
+  ballAt,
   beats,
   bloomAt,
   dropAt,
+  revealAt,
   splashAt,
 } from '../src/landing/timeline'
 
@@ -67,27 +72,89 @@ describe('Feature: the landing story follows the scroll', () => {
       expect(dropAt(beats.fall[1]).y).toBeCloseTo(IMPACT_Y)
     })
 
-    it('Given the page scrolled down step by step, then the drop goes through all six falling shapes in order', () => {
+    it('Given the page scrolled down step by step, then the drop goes through its falling shapes in order, after the faint first one', () => {
       const seen: number[] = []
-      for (const p of steps(0, 1)) {
+      for (const p of steps(beats.become[0], 1)) {
         const { frame } = dropAt(p)
         if (seen.at(-1) !== frame) seen.push(frame)
       }
-      expect(seen).toEqual(Array.from({ length: FALL_FRAMES }, (_, i) => i))
+      expect(seen).toEqual(Array.from({ length: FALL_FRAMES - 1 }, (_, i) => i + 1))
     })
 
-    it('Given the top of the page, then no drop shows until the first drawing comes in', () => {
+    it('Given the top of the page, then no drop shows until the black ball has become it', () => {
       expect(dropAt(0).alpha).toBe(0)
-      expect(dropAt(beats.dropIn[1]).alpha).toBe(1)
+      expect(dropAt(beats.become[1]).alpha).toBe(1)
+    })
+  })
+
+  describe('Scenario: the title gathers into a ball that becomes the raindrop', () => {
+    it('Given the top of the page, then the words are whole and there is no ball', () => {
+      const ball = ballAt(0)
+      expect(ball.gather).toBe(0)
+      expect(ball.alpha).toBe(0)
+    })
+
+    it('Given the ball starts to rise, then it starts from where the words gathered', () => {
+      const ball = ballAt(beats.rise[0])
+      expect(ball.x).toBeCloseTo(GATHER.x)
+      expect(ball.y).toBeCloseTo(GATHER.y)
+    })
+
+    it('Given the words have gathered, then the ball is all there', () => {
+      expect(ballAt(beats.gather[1]).alpha).toBe(1)
+    })
+
+    it('Given the ball has risen, then it is exactly where the raindrop starts its fall', () => {
+      const ball = ballAt(beats.rise[1])
+      expect(ball.x).toBeCloseTo(DROP_X)
+      expect(ball.y).toBeCloseTo(DROP_TOP)
+      expect(dropAt(beats.rise[1]).y).toBeCloseTo(DROP_TOP)
+    })
+
+    it('Given the page scrolled step by step, then the ball moves without jumps and only upwards', () => {
+      let last = ballAt(beats.rise[0])
+      for (const p of steps(beats.rise[0], beats.rise[1])) {
+        const ball = ballAt(p)
+        expect(Math.hypot(ball.x - last.x, ball.y - last.y)).toBeLessThan(15)
+        expect(ball.y).toBeLessThanOrEqual(last.y + 1e-9)
+        last = ball
+      }
+    })
+
+    it('Given the ball has become the raindrop, then the ball is gone and the drop is all there', () => {
+      expect(ballAt(beats.become[1]).alpha).toBe(0)
+      expect(dropAt(beats.become[1]).alpha).toBe(1)
+    })
+  })
+
+  describe('Scenario: the timelapse paints each drawing', () => {
+    it('Given the page scrolled through the first drawing, then the timelapse plays from start to end', () => {
+      expect(revealAt('desk', 'speedpaint', beats.deskPaint[0]).paint).toBe(0)
+      expect(revealAt('desk', 'speedpaint', beats.deskPaint[1]).paint).toBe(1)
+    })
+
+    it('Given the timelapse is still playing, then the gem does not glow yet', () => {
+      const reveal = revealAt('light', 'speedpaint', beats.lightPaint[1])
+      expect(reveal.settle).toBe(0)
+      expect(reveal.glow).toBe(0)
+    })
+
+    it('Given the drawing has settled, then its gem glows', () => {
+      expect(revealAt('desk', 'speedpaint', beats.deskGlow[1]).glow).toBe(1)
+    })
+
+    it('Given ?draw=fade, then there is no timelapse and the drawing is finished as it comes in', () => {
+      const reveal = revealAt('desk', 'fade', beats.deskIn[0])
+      expect(reveal).toMatchObject({ enter: 0, paint: 1, settle: 1 })
     })
   })
 
   describe('Scenario: the splash is tied to the scroll', () => {
-    it('Given the drop has not landed, then there is no splash, no rings and no button', () => {
-      expect(splashAt(beats.splash[0] - 0.001)).toEqual({ frame: -1, ripple: -1, button: 0 })
+    it('Given the drop has not landed, then there is no splash and nothing to click', () => {
+      expect(splashAt(beats.splash[0] - 0.001)).toEqual({ frame: -1, ripple: -1, prompt: 0 })
     })
 
-    it('Given the page scrolled through the splash, then its seven frames play in order and the rings spread', () => {
+    it('Given the page scrolled through the splash, then every one of its frames plays in order', () => {
       const seen: number[] = []
       let ripple = -Infinity
       for (const p of steps(beats.splash[0], 1)) {
@@ -99,8 +166,8 @@ describe('Feature: the landing story follows the scroll', () => {
       expect(seen).toEqual(Array.from({ length: SPLASH_FRAMES }, (_, i) => i))
     })
 
-    it('Given the bottom of the page, then the button is all the way in', () => {
-      expect(splashAt(1).button).toBe(1)
+    it('Given the bottom of the page, then "click to enter" is all the way in', () => {
+      expect(splashAt(1).prompt).toBe(1)
     })
 
     it('Given the same place on the page, then the splash is the same whichever way it was reached', () => {
@@ -125,7 +192,7 @@ describe('Feature: flags for what we are still choosing between', () => {
     })
 
     it('Given an option the flag does not have, then the flag keeps its default', () => {
-      expect(readFlag('draw', '?draw=sideways')).toBe('fade')
+      expect(readFlag('draw', '?draw=sideways')).toBe(FLAGS.draw.options[0])
     })
   })
 })

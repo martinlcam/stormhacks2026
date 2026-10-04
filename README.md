@@ -8,10 +8,12 @@
 ## Landing page
 
 `/` opens the landing page: the story from the Figma file (WU), told by scrolling.
-The title's coloured lights grow from small dots, join as they meet and cover the
-page, then fade to white paper. Two drawings come in with their captions and
-glowing gems, and a raindrop falls through them into blue water. Its splash
-brings in the button to the game. Everything follows the scroll, so scrolling up
+The title's coloured lights spread like watercolour from small blots, join as
+they meet and cover the page, then fade to white paper while the words gather
+into a black ball. The ball rises and becomes a raindrop, which falls through
+the two drawings as the artist's timelapses paint them, their captions wipe in
+and their gems glow, and splashes into blue water. Then "click to enter" comes
+up faintly in the water, and a click anywhere goes into the game. Everything follows the scroll, so scrolling up
 plays it backwards. The code is in `src/landing/`, the images in `public/landing/`.
 
 | Address | What it does |
@@ -27,9 +29,9 @@ the other version and its flag.
 
 | Flag | Options | What it changes |
 | --- | --- | --- |
-| `draw` | `fade`, `speedraw` | How each drawing comes in: a fade, or its pencil lines drawn first |
+| `draw` | `speedpaint`, `fade`, `speedraw` | How each drawing comes in: the artist's watercolour timelapse played with the scroll, a fade, or its pencil lines drawn first |
 | `glow` | `on`, `off` | The gem glows on a layer of its own |
-| `grain` | `on`, `off` | The grain texture from the Figma file |
+| `grain` | `on`, `off` | The grain texture from the Figma file, in the title's paint and over the drawings |
 | `water` | `texture`, `plain` | The water painted from the blue texture in the Figma file, or plain |
 | `sound` | `on`, `off` | The sound button: wind, rain, a chime for the gem and a drip for the splash |
 | `sky` | `subtle`, `grainy` | The grain in the game's sky |

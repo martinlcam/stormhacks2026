@@ -6,8 +6,9 @@
 */
 export const FLAGS = {
   draw: {
-    options: ['fade', 'speedraw'],
-    about: 'How each drawing comes in: a fade, or its pencil lines drawn first',
+    options: ['speedpaint', 'fade', 'speedraw'],
+    about:
+      "How each drawing comes in: the artist's watercolour timelapse played with the scroll, a fade, or its pencil lines drawn first",
   },
   glow: {
     options: ['on', 'off'],

@@ -1,4 +1,12 @@
-import { type Ref, type RefObject, createRef, useEffect, useRef, useState } from 'react'
+import {
+  type MouseEvent,
+  type Ref,
+  type RefObject,
+  createRef,
+  useEffect,
+  useRef,
+  useState,
+} from 'react'
 import { readFlag } from '../flags'
 import {
   CAPTION,
@@ -7,7 +15,7 @@ import {
   FONT,
   LAST_CAPTION,
   PAGE_GRAIN,
-  SPLASH_CENTRE,
+  PROMPT,
   SPLASH_RECT,
   type Slide,
   TITLE_GRAIN,
@@ -21,32 +29,35 @@ import {
 import { createFx } from './fx'
 import { holdScroll } from './hold'
 import { type LandingSound, createLandingSound } from './sound'
+import { type Speedpaint, createSpeedpaint } from './speedpaint'
 import { type Speedraw, createSpeedraw } from './speedraw'
 import {
   DROP_X,
   FRAME,
   TRACK_HEIGHTS,
+  ballAt,
   beat,
   bloomAt,
   dropAt,
   linear,
   ramp,
+  revealAt,
   splashAt,
 } from './timeline'
-import { TitleText } from './Title'
+import { TitleText, gatherTitle, titleParts } from './Title'
 
 /* How long the page takes to scroll itself through the story when asked to. */
 const AUTO_SECONDS = 45
 /* What the reader does to stop it. */
 const TAKE_OVER = ['wheel', 'touchstart', 'keydown', 'pointerdown'] as const
-/* #9: seconds the water takes to cover the page after the button, before the game starts. */
+/* #9: seconds the water takes to cover the page after the click, before the game starts. */
 const LEAVE_SECONDS = 1.6
 /* How far the last caption rises to reach the middle of the frame (#8), in frame pixels. */
 const LAST_CAPTION_RISE = 600
-/* The button's type size, in frame pixels. */
-const BUTTON_SIZE = 44
 
-const speedraw = readFlag('draw') === 'speedraw'
+const drawMode = readFlag('draw')
+const speedpaint = drawMode === 'speedpaint'
+const speedraw = drawMode === 'speedraw'
 const glows = readFlag('glow') === 'on'
 const grainy = readFlag('grain') === 'on'
 const paintedWater = readFlag('water') === 'texture'
@@ -66,6 +77,7 @@ const GLOW_SPAN = 3.4
 /* The parts of a drawing that the page changes as it scrolls. */
 interface SlideParts {
   root: RefObject<HTMLDivElement | null>
+  paint: RefObject<HTMLVideoElement | null>
   colour: RefObject<HTMLImageElement | null>
   lines: RefObject<HTMLCanvasElement | null>
   halo: RefObject<HTMLDivElement | null>
@@ -76,6 +88,7 @@ interface SlideParts {
 function slideParts(): SlideParts {
   return {
     root: createRef(),
+    paint: createRef(),
     colour: createRef(),
     lines: createRef(),
     halo: createRef(),
@@ -97,6 +110,8 @@ export function Landing({ onEnter }: { onEnter: () => void }) {
   const scroller = useRef<HTMLDivElement>(null)
   const title = useRef<HTMLDivElement>(null)
   const titleFrame = useRef<HTMLDivElement>(null)
+  const [titleRefs] = useState(titleParts)
+  const ball = useRef<HTMLDivElement>(null)
   const fxCanvas = useRef<HTMLCanvasElement>(null)
   const frame = useRef<HTMLDivElement>(null)
   const [deskParts] = useState(slideParts)
@@ -104,7 +119,10 @@ export function Landing({ onEnter }: { onEnter: () => void }) {
   const drops = useRef<(HTMLImageElement | null)[]>([])
   const splashes = useRef<(HTMLImageElement | null)[]>([])
   const captions = useRef<(HTMLParagraphElement | null)[]>([])
-  const button = useRef<HTMLButtonElement>(null)
+  const stage = useRef<HTMLDivElement>(null)
+  const prompt = useRef<HTMLButtonElement>(null)
+  // True once "click to enter" can be seen, so that a click anywhere goes into the game.
+  const ready = useRef(false)
   const pageGrain = useRef<HTMLDivElement>(null)
   const hint = useRef<HTMLParagraphElement>(null)
   const rail = useRef<HTMLDivElement>(null)
@@ -123,6 +141,9 @@ export function Landing({ onEnter }: { onEnter: () => void }) {
           createSpeedraw(deskParts.lines.current!, desk.lines),
           createSpeedraw(lightParts.lines.current!, lightSlide.lines),
         ]
+      : null
+    const paints: [Speedpaint, Speedpaint] | null = speedpaint
+      ? [createSpeedpaint(deskParts.paint.current!), createSpeedpaint(lightParts.paint.current!)]
       : null
     sound.current = withSound ? createLandingSound() : null
 
@@ -148,6 +169,11 @@ export function Landing({ onEnter }: { onEnter: () => void }) {
     }
 
     for (const event of TAKE_OVER) track.addEventListener(event, takeOver, { passive: true })
+    const enterKey = (event: KeyboardEvent) => {
+      if (event.key === 'Enter' && ready.current) leaving.current ??= performance.now() / 1000
+    }
+
+    window.addEventListener('keydown', enterKey)
     if (start > 0) track.scrollTop = Math.min(1, start) * travel()
     track.focus()
 
@@ -167,7 +193,7 @@ export function Landing({ onEnter }: { onEnter: () => void }) {
         element.style.height = `${box.h}px`
       }
       for (const caption of captions.current) caption!.style.fontSize = `${CAPTION.size * scale}px`
-      button.current!.style.fontSize = `${BUTTON_SIZE * scale}px`
+      prompt.current!.style.fontSize = `${PROMPT.size * scale}px`
       fx.resize(w, h)
     }
 
@@ -188,7 +214,7 @@ export function Landing({ onEnter }: { onEnter: () => void }) {
         if (drawn > 0) track.scrollTop = drawn * travel()
       }
 
-      // After the button the page holds still while the water covers it.
+      // After the click the page holds still while the water covers it.
       if (leftAt !== null) {
         if (!release) {
           release = holdScroll(track)
@@ -207,35 +233,22 @@ export function Landing({ onEnter }: { onEnter: () => void }) {
       const bloom = bloomAt(p)
       const titleFade = beat('titleFade', p)
       const splash = splashAt(p)
-      const deskShown = beat('deskIn', p) * (1 - beat('deskOut', p))
-      const lightShown = beat('lightIn', p) * (1 - beat('lightOut', p))
+      const deskReveal = revealAt('desk', drawMode, p)
+      const lightReveal = revealAt('light', drawMode, p)
+      const gathering = ballAt(p)
 
-      // The title, and its heavy grain, until they fade to the white paper of the drawings (#1).
-      title.current!.style.opacity = String(1 - titleFade)
-      title.current!.style.visibility = titleFade >= 1 ? 'hidden' : 'visible'
+      // The title's words gather into a black ball, which rises and becomes the raindrop.
+      gatherTitle(titleRefs, gathering.gather)
+      title.current!.style.visibility = gathering.gather >= 1 ? 'hidden' : 'visible'
+      title.current!.style.filter =
+        gathering.gather > 0 ? `blur(${(gathering.gather ** 3 * 12 * scale).toFixed(2)}px)` : 'none'
+      showBall(ball.current!, gathering)
       hint.current!.style.opacity = String(1 - beat('hint', p))
       if (pageGrain.current) pageGrain.current.style.opacity = String(PAGE_GRAIN * titleFade)
 
       // The two drawings (#2, #3, #5) and their gems (#6).
-      showSlide(
-        deskParts,
-        draws?.[0],
-        beat('deskIn', p),
-        beat('deskOut', p),
-        beat('deskGlow', p),
-        p,
-        scale,
-      )
-
-      showSlide(
-        lightParts,
-        draws?.[1],
-        beat('lightIn', p),
-        beat('lightOut', p),
-        beat('lightGlow', p),
-        p,
-        scale,
-      )
+      showSlide(deskParts, deskReveal, { draw: draws?.[0], paint: paints?.[0] }, p, scale)
+      showSlide(lightParts, lightReveal, { draw: draws?.[1], paint: paints?.[1] }, p, scale)
 
       // The captions wipe in (#4), and the last one rises to the middle, grows and goes (#8).
       const [deskCaption, lightCaption, lastCaption] = captions.current
@@ -259,12 +272,11 @@ export function Landing({ onEnter }: { onEnter: () => void }) {
         element!.style.visibility = i === splash.frame ? 'visible' : 'hidden'
       })
 
-      // The button comes in from the rings, and goes when it is pressed.
-      const ready = splash.button > 0.6 && leftAt === null
-      button.current!.style.opacity = String(splash.button * (1 - leave))
-      button.current!.style.transform = `translate(-50%, -50%) scale(${0.85 + 0.15 * splash.button})`
-      button.current!.style.pointerEvents = ready ? 'auto' : 'none'
-      button.current!.disabled = !ready
+      // "click to enter" comes up faintly in the water as the rings fade; then a click anywhere goes on.
+      ready.current = splash.prompt > 0.6 && leftAt === null
+      prompt.current!.style.visibility = splash.prompt > 0 ? 'visible' : 'hidden'
+      prompt.current!.style.opacity = String(splash.prompt * (1 - leave))
+      stage.current!.style.cursor = ready.current ? 'pointer' : ''
 
       const painting = bloom.alpha > 0 || wash > 0 || leave > 0
       fx.render(
@@ -284,7 +296,10 @@ export function Landing({ onEnter }: { onEnter: () => void }) {
 
       rail.current!.style.transform = `scaleY(${p})`
       sound.current?.update({
-        glow: Math.max(beat('deskGlow', p) * deskShown, beat('lightGlow', p) * lightShown),
+        glow: Math.max(
+          deskReveal.glow * (1 - deskReveal.leave),
+          lightReveal.glow * (1 - lightReveal.leave),
+        ),
         wash,
         ripple: splash.ripple,
         leaving: leave,
@@ -299,15 +314,24 @@ export function Landing({ onEnter }: { onEnter: () => void }) {
     return () => {
       cancelAnimationFrame(request)
       for (const event of TAKE_OVER) track.removeEventListener(event, takeOver)
+      window.removeEventListener('keydown', enterKey)
       release?.()
       fx.dispose()
       draws?.forEach((d) => d.dispose())
+      paints?.forEach((d) => d.dispose())
       sound.current?.dispose()
       sound.current = null
     }
-  }, [deskParts, lightParts, onEnter])
+  }, [deskParts, lightParts, titleRefs, onEnter])
 
-  const toggleSound = () => {
+  // Once "click to enter" shows, a click anywhere on the page goes into the game.
+  const enter = () => {
+    if (ready.current) leaving.current ??= performance.now() / 1000
+  }
+
+  const toggleSound = (event: MouseEvent) => {
+    // The sound button is not a click to go on.
+    event.stopPropagation()
     const next = !soundOn
     setSoundOn(next)
     sound.current?.setOn(next)
@@ -321,6 +345,8 @@ export function Landing({ onEnter }: { onEnter: () => void }) {
     >
       <div style={{ height: `${TRACK_HEIGHTS * 100}dvh` }}>
         <div
+          ref={stage}
+          onClick={enter}
           className="sticky top-0 h-dvh overflow-hidden bg-white select-none"
           style={{ fontFamily: FONT }}
         >
@@ -332,7 +358,7 @@ export function Landing({ onEnter }: { onEnter: () => void }) {
 
           <div ref={title} className="pointer-events-none absolute inset-0">
             <div ref={titleFrame} className="absolute">
-              <TitleText />
+              <TitleText parts={titleRefs} />
             </div>
           </div>
 
@@ -345,6 +371,13 @@ export function Landing({ onEnter }: { onEnter: () => void }) {
           <div ref={frame} className="absolute">
             <SlideArt slide={desk} parts={deskParts} />
             <SlideArt slide={lightSlide} parts={lightParts} />
+
+            {/* The black ball the title gathers into, before it becomes the raindrop. */}
+            <div
+              ref={ball}
+              className="pointer-events-none absolute rounded-full"
+              style={{ background: '#141414', visibility: 'hidden', transformOrigin: '50% 70%' }}
+            />
 
             {art.drops.map((src, i) => (
               <img
@@ -402,29 +435,24 @@ export function Landing({ onEnter }: { onEnter: () => void }) {
               </p>
             ))}
 
+            {/* After the splash, faint in the water. Its click, like any other, goes into the game. */}
             <button
-              ref={button}
+              ref={prompt}
               type="button"
-              aria-label="enter the world"
-              onClick={() => {
-                leaving.current ??= performance.now() / 1000
-              }}
-              className="absolute cursor-pointer rounded-full border-0 transition-shadow hover:shadow-[0_0_0_1px_rgba(88,71,71,0.45),0_8px_28px_rgba(30,60,110,0.28)]"
+              className="absolute m-0 cursor-pointer border-0 bg-transparent p-0 whitespace-nowrap"
               style={{
-                left: percent(SPLASH_CENTRE.x, FRAME.w),
-                top: percent(SPLASH_CENTRE.y, FRAME.h),
-                padding: '0.45em 1.6em',
-                color: CAPTION_INK,
-                background: 'rgba(255,255,255,0.88)',
-                boxShadow: '0 0 0 1px rgba(88,71,71,0.25), 0 6px 24px rgba(30,60,110,0.18)',
+                left: percent(PROMPT.x, FRAME.w),
+                top: percent(PROMPT.y, FRAME.h),
+                transform: 'translate(-50%, -50%)',
+                color: 'rgba(255,255,255,0.55)',
                 fontFamily: FONT,
                 fontWeight: 300,
-                letterSpacing: '-0.04em',
+                letterSpacing: '-0.08em',
                 opacity: 0,
-                pointerEvents: 'none',
+                visibility: 'hidden',
               }}
             >
-              enter
+              click to enter
             </button>
           </div>
 
@@ -482,7 +510,7 @@ function Grain({ opacity, ref }: { opacity: number; ref?: Ref<HTMLDivElement> })
   the white of its paper drops away.
 */
 function SlideArt({ slide, parts }: { slide: Slide; parts: SlideParts }) {
-  const { root, colour, lines, halo, bloom, gem: gemLayer } = parts
+  const { root, paint, colour, lines, halo, bloom, gem: gemLayer } = parts
   const { gem } = slide
   const span = gem.reach * GLOW_SPAN
   const glow = {
@@ -498,6 +526,18 @@ function SlideArt({ slide, parts }: { slide: Slide; parts: SlideParts }) {
       className="pointer-events-none absolute inset-0 mix-blend-multiply"
       style={{ visibility: 'hidden' }}
     >
+      {speedpaint && (
+        <video
+          ref={paint}
+          src={slide.paint}
+          muted
+          playsInline
+          preload="auto"
+          disablePictureInPicture
+          className="absolute block max-w-none"
+          style={{ ...place(slide.rect), objectFit: 'fill' }}
+        />
+      )}
       <img
         ref={colour}
         src={slide.image}
@@ -534,29 +574,36 @@ function SlideArt({ slide, parts }: { slide: Slide; parts: SlideParts }) {
 }
 
 /*
-  Show a drawing that is `enter` of the way in and `leave` of the way out,
-  with its gem glowing `glow` (#6). The glow grows as the page goes down and
-  breathes with the scroll, not with time, so it stops when the reader does.
+  Show a drawing as far in as `reveal` says. With the timelapse it plays to
+  `paint` and then gives way to the finished drawing and its gem as it
+  settles. The gem's glow (#6) grows as the page goes down and breathes with
+  the scroll, not with time, so it stops when the reader does.
 */
 function showSlide(
   parts: SlideParts,
-  draw: Speedraw | undefined,
-  enter: number,
-  leave: number,
-  glow: number,
+  reveal: ReturnType<typeof revealAt>,
+  tools: { draw?: Speedraw; paint?: Speedpaint },
   p: number,
   scale: number,
 ) {
+  const { enter, paint, settle, glow, leave } = reveal
   const root = parts.root.current!
-  // A speed-drawn drawing is there from its first line; a faded one is as there as it is faded in.
-  const shown = (draw ? Math.ceil(enter) : enter) * (1 - leave)
+  // A speed-drawn drawing is there from its first line; otherwise it is as there as it has come in.
+  const shown = (tools.draw ? Math.ceil(enter) : enter) * (1 - leave)
   root.style.visibility = shown > 0 ? 'visible' : 'hidden'
   if (shown <= 0) return
   root.style.opacity = String(shown)
   root.style.transform = `translateY(${(1 - enter) * 1.2 - leave * 2}%)`
 
-  if (draw) {
-    draw.draw(linear(0, 0.7, enter))
+  if (tools.paint) {
+    tools.paint.show(paint)
+    parts.paint.current!.style.opacity = String(1 - settle)
+    parts.colour.current!.style.opacity = String(settle)
+    parts.gem.current!.style.opacity = String(settle)
+  }
+
+  if (tools.draw) {
+    tools.draw.draw(linear(0, 0.7, enter))
     const colour = ramp(0.55, 1, enter)
     parts.colour.current!.style.opacity = String(colour)
     parts.gem.current!.style.opacity = String(colour)
@@ -580,6 +627,18 @@ function showSlide(
     g > 0
       ? `drop-shadow(0 0 ${(6 + 16 * g) * scale}px rgba(255,170,30,${g})) brightness(${1 + 0.15 * g})`
       : 'none'
+}
+
+/* Put the black ball where `ball` says, stretching into a drop as it becomes one. */
+function showBall(element: HTMLDivElement, ball: ReturnType<typeof ballAt>) {
+  element.style.visibility = ball.alpha > 0 ? 'visible' : 'hidden'
+  if (ball.alpha <= 0) return
+  element.style.left = percent(ball.x - ball.r, FRAME.w)
+  element.style.top = percent(ball.y - ball.r, FRAME.h)
+  element.style.width = percent(ball.r * 2, FRAME.w)
+  element.style.height = percent(ball.r * 2, FRAME.h)
+  element.style.opacity = String(ball.alpha)
+  element.style.transform = `scale(${1 - 0.3 * ball.become}, ${1 + 0.9 * ball.become})`
 }
 
 /* Wipe a caption in to `amount` (0 to 1) and show it at `opacity`. */
