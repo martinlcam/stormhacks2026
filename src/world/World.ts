@@ -2,8 +2,40 @@ import * as THREE from 'three'
 import { Body } from '../engine/Body'
 import { type Axis, frameFor } from '../engine/gravity'
 import { Portal } from '../engine/Portal'
+import { overgrowth, WOOD_TILE, woodMaterial } from './foliage'
 
 type Vec3 = readonly [number, number, number]
+
+/*
+  Lay a box's texture out by size: one copy every `metres`, with the image's
+  vertical running along the longer side of each face, so the grain of a
+  beam follows the beam.
+
+  BoxGeometry lists its faces as +x, -x, +y, -y, +z, -z, and each face's UVs
+  run 0 to 1 across (u) and up (v).
+*/
+function tileBox(geometry: THREE.BoxGeometry, size: Vec3, metres: number) {
+  const [width, height, depth] = size
+  const { widthSegments, heightSegments, depthSegments } = geometry.parameters
+  const faces: [number, number, number][] = [
+    [depth, height, (depthSegments + 1) * (heightSegments + 1)],
+    [depth, height, (depthSegments + 1) * (heightSegments + 1)],
+    [width, depth, (widthSegments + 1) * (depthSegments + 1)],
+    [width, depth, (widthSegments + 1) * (depthSegments + 1)],
+    [width, height, (widthSegments + 1) * (heightSegments + 1)],
+    [width, height, (widthSegments + 1) * (heightSegments + 1)],
+  ]
+  const uv = geometry.getAttribute('uv')
+  let index = 0
+  for (const [across, up, count] of faces) {
+    for (let i = 0; i < count; i++, index++) {
+      const u = (uv.getX(index) * across) / metres
+      const v = (uv.getY(index) * up) / metres
+      if (across > up) uv.setXY(index, v, u)
+      else uv.setXY(index, u, v)
+    }
+  }
+}
 
 /* Longest box edge, in metres, drawn without extra vertices. */
 const SEGMENT = 2
@@ -15,6 +47,11 @@ export interface BoxOptions {
   material: THREE.Material
   /* Solid to the player. Defaults to true. */
   collide?: boolean
+  /*
+    Repeat the material's texture every this many metres, with its grain
+    along the box's length, instead of stretching one copy over each face.
+  */
+  tile?: number
 }
 
 export interface DoorOptions {
@@ -35,7 +72,10 @@ export interface DoorOptions {
   height?: number
   /* Shrinks or grows the whole door, frame included. Defaults to 1. */
   scale?: number
-  frameMaterial: THREE.Material
+  /* What the frame is made of. Not needed for an overgrown door, which is timber. */
+  frameMaterial?: THREE.Material
+  /* An old timber frame with ivy over it and ferns at its foot. */
+  overgrown?: boolean
   /* Build a slab behind the opening, for doors that stand in the open. */
   backing?: THREE.Material
 }
@@ -80,11 +120,12 @@ export class World {
   private readonly updaters: Updater[] = []
   private readonly triggers: { box: THREE.Box3; inside: boolean; onEnter: () => void }[] = []
 
-  addBox({ size, position, material, collide = true }: BoxOptions): THREE.Mesh {
+  addBox({ size, position, material, collide = true, tile }: BoxOptions): THREE.Mesh {
     // Bending moves vertices, so long faces need enough of them to curve.
     // Vertical edges stay straight when bent and need no extra vertices.
     const segments = (length: number) => Math.max(1, Math.ceil(length / SEGMENT))
     const geometry = new THREE.BoxGeometry(...size, segments(size[0]), 1, segments(size[2]))
+    if (tile) tileBox(geometry, size, tile)
     const mesh = new THREE.Mesh(geometry, material)
     mesh.position.set(...position)
     // The stored bounds are not where a bent mesh is drawn.
@@ -117,7 +158,9 @@ export class World {
     The portal goes nowhere until it is passed to `link`.
   */
   addDoor(options: DoorOptions): Portal {
-    const { position, facing, width = 1.2, height = 2.2, scale = 1, frameMaterial } = options
+    const { position, facing, width = 1.2, height = 2.2, scale = 1, overgrown = false } = options
+    const frameMaterial = overgrown ? woodMaterial() : options.frameMaterial
+    if (!frameMaterial) throw new Error(`Door "${options.name}" needs a frameMaterial`)
     const up = options.up ?? 'y+'
     const yaw = (facing * Math.PI) / 2
     // Door-local → world. It is always a quarter-turn rotation, so a box
@@ -126,13 +169,14 @@ export class World {
     const corner = new THREE.Vector3()
 
     // Place an axis-aligned box given in the door's local frame.
-    const local = (size: Vec3, at: Vec3, material: THREE.Material) => {
+    const local = (size: Vec3, at: Vec3, material: THREE.Material, tile?: number) => {
       corner.set(...size).applyMatrix4(rotation)
       const centre = new THREE.Vector3(...at).multiplyScalar(scale).applyMatrix4(rotation)
       return this.addBox({
         size: [Math.abs(corner.x) * scale, Math.abs(corner.y) * scale, Math.abs(corner.z) * scale],
         position: [position[0] + centre.x, position[1] + centre.y, position[2] + centre.z],
         material,
+        tile,
       })
     }
 
@@ -143,13 +187,11 @@ export class World {
     // inside the doorway as a second frame peeling off the first.
     const depth = 0.15
     const z = -depth / 2 - 0.005
-    local(
-      [post, height + post, depth],
-      [-(width + post) / 2, (height + post) / 2, z],
-      frameMaterial,
-    )
-    local([post, height + post, depth], [(width + post) / 2, (height + post) / 2, z], frameMaterial)
-    local([width, post, depth], [0, height + post / 2, z], frameMaterial)
+    const tile = overgrown ? WOOD_TILE * scale : undefined
+    const side = (width + post) / 2
+    local([post, height + post, depth], [-side, (height + post) / 2, z], frameMaterial, tile)
+    local([post, height + post, depth], [side, (height + post) / 2, z], frameMaterial, tile)
+    local([width, post, depth], [0, height + post / 2, z], frameMaterial, tile)
     if (options.backing) {
       local([width + post * 2, height + post, 0.4], [0, (height + post) / 2, -0.3], options.backing)
     }
@@ -163,6 +205,13 @@ export class World {
       height,
       scale,
     })
+    if (overgrown) {
+      const growth = overgrowth({ name: options.name, width, height, post })
+      growth.position.set(...position)
+      growth.quaternion.setFromRotationMatrix(rotation)
+      growth.scale.setScalar(scale)
+      this.scene.add(growth)
+    }
     this.portals.push(portal)
     return portal
   }

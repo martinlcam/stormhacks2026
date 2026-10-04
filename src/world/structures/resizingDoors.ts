@@ -18,7 +18,7 @@ export function resizingDoors(onResize: () => void, onEnterVault: () => void): S
         name: 'resize-tall',
         position: [14, 0, -2],
         facing: 3,
-        frameMaterial: glow(palette.purple),
+        overgrown: true,
         backing: matte(palette.stone),
       })
       const small = world.addDoor({
@@ -26,7 +26,7 @@ export function resizingDoors(onResize: () => void, onEnterVault: () => void): S
         position: [14, 0, 2],
         facing: 3,
         scale: RATIO,
-        frameMaterial: glow(palette.cyan),
+        overgrown: true,
         backing: matte(palette.stone),
       })
       world.link(tall, small)

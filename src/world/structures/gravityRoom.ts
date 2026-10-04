@@ -111,7 +111,7 @@ export function gravityRoom(onWall: () => void, onCeiling: () => void): Structur
         name: 'gravity-outside',
         position: [-5, 0, 9],
         facing: 2,
-        frameMaterial: glow(palette.bone, 1.2),
+        overgrown: true,
         backing: matte(palette.stone),
       })
       const entrance = world.addDoor({

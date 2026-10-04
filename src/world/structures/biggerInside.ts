@@ -25,7 +25,7 @@ export function biggerInside(onEnter: () => void): Structure {
         name: 'booth',
         position: [0, 0, -7],
         facing: 0,
-        frameMaterial: glow(palette.purple),
+        overgrown: true,
       })
 
       // The hall: 14 × 20 × 7 metres, door in the middle of its +Z wall.

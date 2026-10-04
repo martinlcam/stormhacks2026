@@ -16,14 +16,14 @@ export function loopCorridor(onEnter: () => void): Structure {
         name: 'loop-west',
         position: [-16, 0, z],
         facing: 1,
-        frameMaterial: glow(palette.cyan),
+        overgrown: true,
         backing: matte(palette.stone),
       })
       const east = world.addDoor({
         name: 'loop-east',
         position: [-8, 0, z],
         facing: 3,
-        frameMaterial: glow(palette.cyan),
+        overgrown: true,
         backing: matte(palette.stone),
       })
       world.link(west, east)
