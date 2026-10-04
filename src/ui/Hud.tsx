@@ -19,11 +19,20 @@ export function Hud({ onPlay }: { onPlay: () => void }) {
 
 function Crosshair() {
   const prompt = useGame((s) => s.prompt)
+  const charge = useGame((s) => s.charge)
   return (
     <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
       <div className="size-1.5 rounded-full bg-bone/80 ring-1 ring-black/40" />
+      {charge !== null && (
+        <div className="absolute top-4 left-1/2 h-1.5 w-28 -translate-x-1/2 overflow-hidden rounded-full bg-black/50 ring-1 ring-bone/20">
+          <div
+            className="h-full bg-linear-to-r from-cyan to-purple"
+            style={{ width: `${charge * 100}%` }}
+          />
+        </div>
+      )}
       {prompt && (
-        <div className="absolute top-5 left-1/2 -translate-x-1/2 rounded bg-black/60 px-2 py-1 text-sm whitespace-nowrap">
+        <div className="absolute top-8 left-1/2 -translate-x-1/2 rounded bg-black/60 px-2 py-1 text-sm whitespace-nowrap">
           {prompt}
         </div>
       )}
@@ -53,8 +62,8 @@ function StartScreen({ onPlay }: { onPlay: () => void }) {
         <dd>jump</dd>
         <dt className="font-mono text-cyan">E</dt>
         <dd>pick up / put down</dd>
-        <dt className="font-mono text-cyan">Click</dt>
-        <dd>throw</dd>
+        <dt className="font-mono text-cyan">Q</dt>
+        <dd>throw (hold to charge)</dd>
         <dt className="font-mono text-cyan">Esc</dt>
         <dd>release mouse</dd>
       </dl>

@@ -36,6 +36,7 @@ export function bootstrap(canvas: HTMLCanvasElement): () => void {
 
   const items = new ItemSystem(engine, {
     prompt: (text) => game.setPrompt(text),
+    charge: (level) => game.setCharge(level),
     thrownThrough: () => game.discover('thrown-through'),
   })
   world.onUpdate((dt) => items.update(dt))

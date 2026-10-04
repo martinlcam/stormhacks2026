@@ -12,7 +12,11 @@ const HOLD_RIGHT = 0.34
 const HOLD_BELOW = 0.3
 /* Never pull a held item closer to the eye than this. */
 const HOLD_MIN = 0.25
-const THROW_SPEED = 11
+/* Throw speed for the lightest tap and for a full charge, per unit of scale. */
+const THROW_MIN = 3
+const THROW_MAX = 18
+/* Seconds of holding Q to reach a full charge. */
+const CHARGE_TIME = 1.2
 /* A throw leaves slightly above the line of sight. */
 const THROW_LIFT = 0.12
 /* The aim ray may pass through this many portals. */
@@ -20,9 +24,21 @@ const MAX_HOPS = 3
 /* Aiming is forgiving: items count as this much larger than they are. */
 const AIM_SLACK = 1.4
 
+/* How full the charge is, 0 to 1, after holding Q for this long. */
+export function chargeLevel(heldSeconds: number): number {
+  return Math.max(0, Math.min(1, heldSeconds / CHARGE_TIME))
+}
+
+/* How fast a throw leaves the hand for a charge level of 0 to 1. */
+export function throwSpeed(level: number): number {
+  return THROW_MIN + (THROW_MAX - THROW_MIN) * level
+}
+
 export interface ItemEvents {
   /* The hint to show under the crosshair, or null for none. */
   prompt(text: string | null): void
+  /* How full the throw charge is, 0 to 1, or null when not charging. */
+  charge(level: number | null): void
   /* A loose item went through a portal by itself. */
   thrownThrough(): void
 }
@@ -98,6 +114,10 @@ export class ItemSystem {
   private heldThrough: Portal | null = null
   private target: Item | null = null
   private prompt: string | null = null
+  /* Seconds Q has been held, or null when no throw is being charged. */
+  private charging: number | null = null
+  /* The player's scale last frame, to notice when a doorway resizes them. */
+  private playerScale = 1
   private readonly abort = new AbortController()
 
   constructor(
@@ -115,10 +135,17 @@ export class ItemSystem {
       },
       { signal },
     )
-    document.addEventListener(
-      'mousedown',
+    window.addEventListener(
+      'keydown',
       (event) => {
-        if (event.button === 0 && engine.player.locked) this.throw()
+        if (event.code === 'KeyQ' && !event.repeat && engine.player.locked) this.startCharge()
+      },
+      { signal },
+    )
+    window.addEventListener(
+      'keyup',
+      (event) => {
+        if (event.code === 'KeyQ') this.throw()
       },
       { signal },
     )
@@ -131,6 +158,7 @@ export class ItemSystem {
   /* E: pick up what the crosshair is on, or put down what is held. */
   use() {
     if (this.held) {
+      this.cancelCharge()
       this.release(0)
     } else if (this.target) {
       this.held = this.target
@@ -139,14 +167,35 @@ export class ItemSystem {
     }
   }
 
+  /* Q pressed: start winding up a throw. */
+  startCharge() {
+    if (this.held && this.charging === null) this.charging = 0
+  }
+
+  /* Q let go: throw, as hard as the wind-up was long. */
   throw() {
-    if (this.held) this.release(THROW_SPEED)
+    if (this.charging === null) return
+    const level = chargeLevel(this.charging)
+    this.cancelCharge()
+    if (this.held) this.release(throwSpeed(level))
+  }
+
+  private cancelCharge() {
+    if (this.charging === null) return
+    this.charging = null
+    this.events.charge(null)
   }
 
   update(dt: number) {
     const { world, player } = this.engine
     player.eye(eye)
     player.look(look)
+
+    // Whatever the player carries through a resizing door is resized with them.
+    if (this.held && player.scale !== this.playerScale) {
+      this.held.body.scale *= player.scale / this.playerScale
+    }
+    this.playerScale = player.scale
 
     for (const item of world.items) {
       if (item === this.held) continue
@@ -170,9 +219,18 @@ export class ItemSystem {
       mesh.scale.setScalar(body.scale)
     }
 
+    if (this.charging !== null) {
+      // Losing the mouse or the item ends the wind-up without a throw.
+      if (!this.held || !player.locked) {
+        this.cancelCharge()
+      } else {
+        this.charging += dt
+        this.events.charge(chargeLevel(this.charging))
+      }
+    }
     if (this.held) this.carry()
     this.target = this.held ? null : this.aim()
-    this.setPrompt(this.held ? 'E  put down  ·  Click  throw' : this.target ? 'E  pick up' : null)
+    this.setPrompt(this.held ? 'E  put down  ·  hold Q  throw' : this.target ? 'E  pick up' : null)
   }
 
   /* Keep the held item in front of the eye, short of walls, through doorways. */

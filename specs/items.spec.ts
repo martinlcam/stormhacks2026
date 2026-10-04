@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 import * as THREE from 'three'
+import { chargeLevel, throwSpeed } from '../src/game/items'
 import { FACING, FRAME, door, floor, gem, linked, simulate } from './support'
 
 describe('Feature: gems fall, bounce and roll', () => {
@@ -71,6 +72,44 @@ describe('Feature: throwing a gem through a door', () => {
 
       expect(body.scale).toBe(1)
       expect(body.position.x).toBeLessThan(4.02)
+    })
+  })
+})
+
+describe('Feature: charging a throw', () => {
+  describe('Scenario: tapping Q', () => {
+    it('Given I hold a gem, when I tap Q for a tenth of a second, then the throw is light', () => {
+      const speed = throwSpeed(chargeLevel(0.1))
+
+      expect(speed).toBeGreaterThan(throwSpeed(0))
+      expect(speed).toBeLessThan(throwSpeed(0.25))
+    })
+  })
+
+  describe('Scenario: holding Q', () => {
+    it('Given I hold a gem, when I hold Q for longer, then the throw is stronger', () => {
+      const short = throwSpeed(chargeLevel(0.3))
+      const long = throwSpeed(chargeLevel(0.9))
+
+      expect(long).toBeGreaterThan(short)
+    })
+
+    it('Given the charge is already full, when I keep holding Q, then the throw gets no stronger', () => {
+      expect(chargeLevel(1.2)).toBe(1)
+      expect(throwSpeed(chargeLevel(10))).toBe(throwSpeed(1))
+    })
+  })
+
+  describe('Scenario: a full throw against a light one', () => {
+    it('Given two gems thrown level from the same spot, when one has a full charge and one a light tap, then the full one lands further away', () => {
+      const land = (speed: number) => {
+        const body = gem(0, 1.4, 0)
+        body.velocity.set(speed, 0, 0)
+        simulate(body, 8, [floor])
+        return body.position.x
+      }
+
+      expect(land(throwSpeed(1))).toBeGreaterThan(land(throwSpeed(0)) * 2)
     })
   })
 })
