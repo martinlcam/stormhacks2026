@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { frameFor } from '../engine/gravity'
 import type { PlayerController } from '../engine/PlayerController'
 import { PORTAL_ONLY_LAYER } from '../engine/PortalRenderer'
 import { palette } from '../world/materials'
@@ -22,6 +23,8 @@ const FULL_SWING_SPEED = 4.5
 const DOWN = new THREE.Vector3(0, -1, 0)
 const target = new THREE.Vector3()
 const aim = new THREE.Quaternion()
+const turn = new THREE.Quaternion()
+const UP = new THREE.Vector3(0, 1, 0)
 
 /*
   Paper-like: one flat tone per face, no gloss. It gives off a little of its
@@ -106,12 +109,17 @@ export class Avatar {
   update(dt: number, holding: Item | null) {
     const { player, group } = this
     group.position.copy(player.position)
-    group.rotation.y = player.yaw
+    // Stand on whatever surface the player stands on, turned to face their way.
+    group.quaternion
+      .setFromRotationMatrix(frameFor(player.axis))
+      .multiply(turn.setFromAxisAngle(UP, player.yaw))
     group.scale.setScalar(player.scale)
     group.updateMatrixWorld(true)
 
     // Legs: small quick steps, in time with the ground covered.
-    const speed = Math.hypot(player.velocity.x, player.velocity.z) / player.scale
+    const rising = player.velocity.dot(player.up)
+    const along = Math.sqrt(Math.max(0, player.velocity.lengthSq() - rising * rising))
+    const speed = along / player.scale
     const wanted = player.onGround ? Math.min(1, speed / FULL_SWING_SPEED) : 0
     this.swing += (wanted - this.swing) * (1 - Math.exp(-10 * dt))
     this.phase += speed * STRIDE * dt
