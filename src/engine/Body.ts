@@ -3,6 +3,7 @@ import { axisOf, upVector } from './gravity'
 import { elsewhere, onPlanet, POLE, type Site, walkOnPlanet } from './planet'
 import type { Portal } from './Portal'
 import { yawDelta } from './portalMath'
+import { sweepSphereBox } from './sweep'
 
 export const GRAVITY = 16
 /* The fastest a fall gets, in metres per second. */
@@ -24,6 +25,7 @@ const localBefore = new THREE.Vector3()
 const localAfter = new THREE.Vector3()
 const across = new THREE.Vector3()
 const relative = new THREE.Vector3()
+const contactNormal = new THREE.Vector3()
 
 /*
   A ball that falls, bounces, rolls and goes through portals.
@@ -81,7 +83,7 @@ export class Body {
     const falling = -this.velocity.dot(this.up) - TERMINAL_SPEED * this.scale
     if (falling > 0) this.velocity.addScaledVector(this.up, falling)
 
-    // Never move more than half a radius at once, or thin walls are skipped.
+    // Prefer steps no longer than half a radius; sweep longer steps if capped.
     const distance = this.velocity.length() * dt
     const steps = Math.min(MAX_SUBSTEPS, Math.max(1, Math.ceil(distance / (this.radius * 0.5))))
     for (let i = 0; i < steps; i++) this.substep(dt / steps, colliders, portals)
@@ -102,7 +104,14 @@ export class Body {
     const doorway = portals.find(
       (portal) => portal.site === this.site && portal.fits(size, size) && portal.inDoorway(before),
     )
-    const grounded = this.collide(colliders, doorway)
+    // A tiny gem thrown by a larger player can exceed the substep budget.
+    // Sweep the whole segment in that case so even thin glass still stops it.
+    const sweptGround =
+      !jumped &&
+      before.distanceToSquared(this.position) > this.radius * this.radius * 0.25 &&
+      this.sweep(colliders, doorway)
+
+    const grounded = this.collide(colliders, doorway) || sweptGround
     if (!jumped) this.traverse(portals)
 
     if (grounded) {
@@ -117,6 +126,41 @@ export class Body {
         this.resting = true
       }
     }
+  }
+
+  /* Keep a kick or another gem's push from displacing this ball through a solid. */
+  constrainPush(from: THREE.Vector3, colliders: readonly THREE.Box3[], portals: readonly Portal[]) {
+    if (from.distanceToSquared(this.position) < 1e-12 * this.scale * this.scale) return
+    before.copy(from)
+    const size = this.radius * 2
+    const doorway = portals.find(
+      (portal) => portal.site === this.site && portal.fits(size, size) && portal.inDoorway(before),
+    )
+    this.sweep(colliders, doorway)
+    this.collide(colliders, doorway)
+    this.traverse(portals)
+    this.resting = false
+  }
+
+  /* Stop at the first contact along the segment starting at `before`. */
+  private sweep(colliders: readonly THREE.Box3[], doorway: Portal | undefined): boolean {
+    let contact = Infinity
+
+    for (const box of colliders) {
+      if (doorway?.ghostColliders.has(box) || elsewhere(box, this.site)) continue
+      const t = sweepSphereBox(before, this.position, this.radius, box, normal)
+      if (t >= contact) continue
+      contact = t
+      contactNormal.copy(normal)
+    }
+
+    if (contact > 1) return false
+    this.position.lerpVectors(before, this.position, contact)
+    this.position.addScaledVector(contactNormal, this.radius * 1e-6)
+    const into = this.velocity.dot(contactNormal)
+    const bounce = -into > DEAD_SPEED * this.scale ? BOUNCE : 0
+    if (into < 0) this.velocity.addScaledVector(contactNormal, -(1 + bounce) * into)
+    return contactNormal.dot(this.up) > 0.7
   }
 
   /*

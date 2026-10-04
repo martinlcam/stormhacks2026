@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'bun:test'
+import { PlayerController } from '../src/engine/PlayerController'
 import { biggerInside } from '../src/world/structures/biggerInside'
 import { World } from '../src/world/World'
-import { FRAME } from './support'
+import { FRAME, quietBrowser } from './support'
 
 /* The desks, as the classroom lays them out: columns across the room, rows from the front. */
 const COLUMNS = [-2.7, -0.9, 0.9, 2.7]
@@ -35,8 +36,55 @@ function classroom() {
   }
   // The player is in the room, so the goal is being shown.
   world.checkTriggers(chalks[0].body.position)
-  return { seat, wait, learnt: () => learnt, goal: () => goals.at(-1) }
+  return { world, seat, wait, learnt: () => learnt, goal: () => goals.at(-1) }
 }
+
+describe('Feature: jumping from the classroom chairs', () => {
+  for (const dt of [FRAME, 1 / 20]) {
+    for (const [direction, keys] of [
+      ['forwards', ['KeyW']],
+      ['backwards', ['KeyS']],
+      ['left', ['KeyA']],
+      ['right', ['KeyD']],
+      ['diagonally', ['KeyS', 'KeyD']],
+    ] as const) {
+      it(`Given any chair, when I run and jump ${direction} at ${Math.round(1 / dt)} fps, then I stay in the room`, () => {
+        const dom = quietBrowser()
+        const keyboard = new EventTarget()
+        Object.assign(globalThis, { window: keyboard })
+        const { world } = classroom()
+
+        for (const x of COLUMNS) {
+          for (const z of ROWS) {
+            const player = new PlayerController(dom)
+            player.position.set(600 + x, 0.95, z + 0.48)
+            player.onGround = true
+
+            try {
+              for (const code of ['Space', 'ShiftLeft', ...keys]) {
+                keyboard.dispatchEvent(Object.assign(new Event('keydown'), { code }))
+              }
+
+              for (let time = 0; time < 0.3; time += dt) {
+                const before = player.position.clone()
+                player.update(dt, world.colliders, world.portals)
+
+                expect(player.position.distanceTo(before)).toBeLessThan(8 * dt + 0.4)
+                expect(player.position.x).toBeGreaterThanOrEqual(595.5)
+                expect(player.position.x).toBeLessThanOrEqual(604.5)
+                expect(Math.abs(player.position.z)).toBeLessThanOrEqual(5.5)
+                expect(player.position.y + 1.8).toBeLessThanOrEqual(3.2 + 1e-6)
+                expect(player.doors).toBe(0)
+              }
+            } finally {
+              player.dispose()
+            }
+          }
+        }
+      })
+    }
+  }
+})
 
 describe('Feature: the seating plan', () => {
   it('Given the chalk gems lie on the floor, then nobody is seated', () => {

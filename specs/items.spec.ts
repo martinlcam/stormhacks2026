@@ -26,6 +26,22 @@ describe('Feature: gems fall, bounce and roll', () => {
 
       expect(body.position.x).toBeLessThan(4 - 0.19)
     })
+
+    for (const scale of [1 / 16, 1 / 64, 1 / 256]) {
+      it(`Given a tiny gem of scale ${scale}, when a full-size running player throws it at thin glass, then it cannot tunnel through`, () => {
+        const glass = new THREE.Box3(new THREE.Vector3(600, 0, -5), new THREE.Vector3(600.02, 3, 5))
+
+        for (let offset = 0; offset < 60; offset++) {
+          const body = gem(599.7 + offset * 0.001, 1, 0, 0.18)
+          body.scale = scale
+          body.velocity.set(26, 0, 0)
+          body.step(0.05, [glass], [])
+
+          expect(body.position.x).toBeLessThanOrEqual(glass.min.x - body.radius + 1e-6)
+          expect(body.velocity.x).toBeLessThan(0)
+        }
+      })
+    }
   })
 })
 
