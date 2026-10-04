@@ -151,7 +151,12 @@ describe('Feature: the landing story follows the scroll', () => {
 
   describe('Scenario: the splash is tied to the scroll', () => {
     it('Given the drop has not landed, then there is no splash and nothing to click', () => {
-      expect(splashAt(beats.splash[0] - 0.001)).toEqual({ frame: -1, ripple: -1, prompt: 0 })
+      expect(splashAt(beats.splash[0] - 0.001)).toEqual({
+        frame: -1,
+        alpha: 0,
+        ripple: -1,
+        prompt: 0,
+      })
     })
 
     it('Given the page scrolled through the splash, then every one of its frames plays in order', () => {
@@ -164,6 +169,12 @@ describe('Feature: the landing story follows the scroll', () => {
         ripple = splash.ripple
       }
       expect(seen).toEqual(Array.from({ length: SPLASH_FRAMES }, (_, i) => i))
+    })
+
+    it('Given the splash has ended, then its last line has faded all the way out', () => {
+      const splash = splashAt(beats.splashFade[1])
+      expect(splash.frame).toBe(SPLASH_FRAMES - 1)
+      expect(splash.alpha).toBe(0)
     })
 
     it('Given the bottom of the page, then "click to enter" is all the way in', () => {

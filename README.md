@@ -13,7 +13,10 @@ they meet and cover the page, then fade to white paper while the words gather
 into a black ball. The ball rises and becomes a raindrop, which falls through
 the two drawings as the artist's timelapses paint them, their captions wipe in
 and their gems glow, and splashes into blue water. Then "click to enter" comes
-up faintly in the water, and a click anywhere goes into the game. Everything follows the scroll, so scrolling up
+up faintly in the water, and a click anywhere goes into the game: the water covers
+the page, and the game, already running under it, shows through the blue. The same
+click captures the mouse, so there is no start screen; the controls stay in the top
+left until the player has walked, looked round, jumped and picked something up. Everything follows the scroll, so scrolling up
 plays it backwards. The code is in `src/landing/`, the images in `public/landing/`.
 
 | Address | What it does |

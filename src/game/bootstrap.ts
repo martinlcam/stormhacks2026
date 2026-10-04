@@ -18,6 +18,11 @@ import { useLightingSettings } from './lightingSettings'
 import { Sound } from './sound'
 import { useGame } from './store'
 
+/* The keys that walk. */
+const WALK_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD'])
+/* Pixels of mouse movement that count as having looked around: about half a turn. */
+const LOOK_PIXELS = 1400
+
 /*
   Build the sandbox, start the engine and wire both to the store.
   Returns a function that tears everything down again.
@@ -104,9 +109,24 @@ export function bootstrap(
       if (event.code === 'End' && !lightingScene) {
         for (const id of Object.keys(discoveries) as DiscoveryId[]) game.discover(id)
       }
+      // The first time the player walks and jumps, the controls shown to new players tick them off.
+      if (WALK_KEYS.has(event.code)) game.learn('move')
+      if (event.code === 'Space') game.learn('jump')
     },
     { signal: keys.signal },
   )
+
+  let looked = 0
+  window.addEventListener(
+    'mousemove',
+    (event) => {
+      if (!engine.player.locked) return
+      looked += Math.abs(event.movementX) + Math.abs(event.movementY)
+      if (looked > LOOK_PIXELS) game.learn('look')
+    },
+    { signal: keys.signal },
+  )
+
   engine.onStats = ({ fps, passes, scale }) => game.setStats(fps, passes, scale)
 
   const lights = lightingLab?.lights ?? worldLamp!.lights
@@ -120,7 +140,11 @@ export function bootstrap(
       thrownThrough: () => {
         if (!lightingScene) game.discover('thrown-through')
       },
-      pickedUp: () => sound.pickUp(),
+      pickedUp: () => {
+        sound.pickUp()
+        // The lamp the player starts holding does not count, only what they pick up themselves.
+        if (engine.player.locked) game.learn('pickUp')
+      },
       letGo: (level) => (level === null ? sound.putDown() : sound.throw(level)),
     },
     worldLamp?.lamp,
