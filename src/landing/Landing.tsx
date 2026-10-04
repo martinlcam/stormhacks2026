@@ -50,8 +50,12 @@ import { TitleText, gatherTitle, titleParts } from './Title'
 const AUTO_SECONDS = 45
 /* What the reader does to stop it. */
 const TAKE_OVER = ['wheel', 'touchstart', 'keydown', 'pointerdown'] as const
-/* #9: seconds the water takes to cover the page after the click, before the game starts. */
-const LEAVE_SECONDS = 1.6
+/*
+  #9: seconds the water takes to cover the page after the click, and then
+  for the page to fade and the game, already running under it, to show.
+*/
+const LEAVE_SECONDS = 1.3
+const REVEAL_SECONDS = 1.2
 /* How far the last caption rises to reach the middle of the frame (#8), in frame pixels. */
 const LAST_CAPTION_RISE = 600
 
@@ -106,7 +110,7 @@ function slideParts(): SlideParts {
   have the page scroll by itself (`?auto=60` to take 60 seconds), or `?flags`
   for the panel of things we are still choosing between.
 */
-export function Landing({ onEnter }: { onEnter: () => void }) {
+export function Landing({ onEnter, onGone }: { onEnter: () => void; onGone: () => void }) {
   const scroller = useRef<HTMLDivElement>(null)
   const title = useRef<HTMLDivElement>(null)
   const titleFrame = useRef<HTMLDivElement>(null)
@@ -155,6 +159,7 @@ export function Landing({ onEnter }: { onEnter: () => void }) {
     let held = 0
     let release: (() => void) | null = null
     let entered = false
+    let gone = false
 
     const travel = () => track.scrollHeight - track.clientHeight
     const query = new URLSearchParams(location.search)
@@ -230,6 +235,23 @@ export function Landing({ onEnter }: { onEnter: () => void }) {
       drawn = p
 
       const leave = leftAt === null ? 0 : linear(0, LEAVE_SECONDS, seconds - leftAt)
+      // The click starts the game under the page, so that it is there when the water covers it.
+      if (leftAt !== null && !entered) {
+        entered = true
+        onEnter()
+      }
+
+      // Once the water covers the page, the page fades and the game shows through the blue.
+      const reveal =
+        leftAt === null
+          ? 0
+          : linear(LEAVE_SECONDS, LEAVE_SECONDS + REVEAL_SECONDS, seconds - leftAt)
+      track.style.opacity = String(1 - reveal)
+      if (reveal >= 1 && !gone) {
+        gone = true
+        onGone()
+      }
+
       const bloom = bloomAt(p)
       const titleFade = beat('titleFade', p)
       const splash = splashAt(p)
@@ -269,7 +291,9 @@ export function Landing({ onEnter }: { onEnter: () => void }) {
       })
 
       splashes.current.forEach((element, i) => {
-        element!.style.visibility = i === splash.frame ? 'visible' : 'hidden'
+        const shown = i === splash.frame && splash.alpha > 0
+        element!.style.visibility = shown ? 'visible' : 'hidden'
+        if (shown) element!.style.opacity = String(splash.alpha)
       })
 
       // "click to enter" comes up faintly in the water as the rings fade; then a click anywhere goes on.
@@ -304,11 +328,6 @@ export function Landing({ onEnter }: { onEnter: () => void }) {
         ripple: splash.ripple,
         leaving: leave,
       })
-
-      if (leave >= 1 && !entered) {
-        entered = true
-        onEnter()
-      }
     })
 
     return () => {
@@ -322,7 +341,7 @@ export function Landing({ onEnter }: { onEnter: () => void }) {
       sound.current?.dispose()
       sound.current = null
     }
-  }, [deskParts, lightParts, titleRefs, onEnter])
+  }, [deskParts, lightParts, titleRefs, onEnter, onGone])
 
   // Once "click to enter" shows, a click anywhere on the page goes into the game.
   const enter = () => {
@@ -341,7 +360,7 @@ export function Landing({ onEnter }: { onEnter: () => void }) {
     <div
       ref={scroller}
       tabIndex={-1}
-      className="fixed inset-0 overflow-x-hidden overflow-y-auto overscroll-none bg-white outline-none"
+      className="fixed inset-0 z-10 overflow-x-hidden overflow-y-auto overscroll-none bg-white outline-none"
     >
       <div style={{ height: `${TRACK_HEIGHTS * 100}dvh` }}>
         <div

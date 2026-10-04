@@ -54,6 +54,8 @@ export const beats = {
   fall: [0.132, 0.79],
   /* #10: the splash, and then, as its rings fade, the invitation to go on. */
   splash: [0.79, 0.9],
+  /* Its last line fades all the way out. */
+  splashFade: [0.9, 0.92],
   prompt: [0.89, 0.95],
 } as const satisfies Record<string, readonly [number, number]>
 
@@ -219,15 +221,22 @@ const RIPPLE_SECONDS_PER_P = 9
   The splash at progress `p`. Like everything else it follows the scroll:
   the drop lands and its frames play only as far as the page is scrolled,
   and scrolling up takes them back. `frame` is which splash frame to show
-  (or -1 before the drop lands), `ripple` how many seconds of the animation
-  have passed since it landed (-1 before), and `prompt` how far "click to
+  (or -1 before the drop lands) and `alpha` how much of it shows, as its
+  last line fades out; `ripple` is how many seconds of the animation have
+  passed since it landed (-1 before), and `prompt` how far "click to
   enter" has come up.
 */
-export function splashAt(p: number): { frame: number; ripple: number; prompt: number } {
-  if (p < beats.splash[0]) return { frame: -1, ripple: -1, prompt: 0 }
+export function splashAt(p: number): {
+  frame: number
+  alpha: number
+  ripple: number
+  prompt: number
+} {
+  if (p < beats.splash[0]) return { frame: -1, alpha: 0, ripple: -1, prompt: 0 }
   const into = linear(beats.splash[0], beats.splash[1], p)
   return {
     frame: Math.min(SPLASH_FRAMES - 1, Math.floor(into * SPLASH_FRAMES)),
+    alpha: 1 - beat('splashFade', p),
     ripple: (p - beats.splash[0]) * RIPPLE_SECONDS_PER_P,
     prompt: beat('prompt', p),
   }

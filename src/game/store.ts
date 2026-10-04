@@ -1,9 +1,16 @@
 import { create } from 'zustand'
 import { type Discovery, type DiscoveryId, discoveries } from './discoveries'
 
+/* The controls a new player is shown until they have used each of them. */
+export type Lesson = 'move' | 'look' | 'jump' | 'pickUp'
+
 interface GameState {
   /* True while the mouse is captured and the player is in control. */
   playing: boolean
+  /* True once the mouse has been captured at least once. */
+  everPlayed: boolean
+  /* Which of the controls the player has used so far. */
+  learned: Record<Lesson, boolean>
   fps: number
   passes: number
   /* The player's size relative to normal. */
@@ -20,6 +27,7 @@ interface GameState {
   goal: string | null
 
   setPlaying(playing: boolean): void
+  learn(lesson: Lesson): void
   setStats(fps: number, passes: number, scale: number): void
   setPrompt(prompt: string | null): void
   setCharge(charge: number | null): void
@@ -34,6 +42,8 @@ interface GameState {
 */
 export const useGame = create<GameState>((set, get) => ({
   playing: false,
+  everPlayed: false,
+  learned: { move: false, look: false, jump: false, pickUp: false },
   fps: 0,
   passes: 0,
   scale: 1,
@@ -43,7 +53,11 @@ export const useGame = create<GameState>((set, get) => ({
   charge: null,
   goal: null,
 
-  setPlaying: (playing) => set({ playing }),
+  setPlaying: (playing) => set({ playing, everPlayed: get().everPlayed || playing }),
+  learn: (lesson) => {
+    if (get().learned[lesson]) return
+    set({ learned: { ...get().learned, [lesson]: true } })
+  },
   setStats: (fps, passes, scale) => set({ fps, passes, scale }),
   setPrompt: (prompt) => set({ prompt }),
   setCharge: (charge) => set({ charge }),

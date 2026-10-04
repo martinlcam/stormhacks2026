@@ -10,8 +10,8 @@
      (#1).
   2. #8: blue watercolour rises up the page from the bottom, uneven along
      its top and darker where it collects there, with light moving in it.
-  3. #9: after the button, the water covers everything and darkens to the
-     night of the game.
+  3. #9: after the click, the water covers everything, and the game shows
+     through the blue as the page fades.
 */
 
 const VERTEX = `
@@ -173,7 +173,6 @@ vec4 water(vec2 px, vec2 q, vec2 uv) {
   c += vec3(0.9, 0.95, 1.0) * (glints * 0.18 + web * 0.03);
 
   float a = covered * mix(0.6, 0.9, deep);
-  c = mix(c, vec3(0.071, 0.039, 0.11), smoothstep(0.5, 1.0, uFlood));
   a = mix(a, covered, smoothstep(0.2, 0.8, uFlood));
   return vec4(c * a, a);
 }
