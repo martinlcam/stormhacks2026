@@ -1,14 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { discoveries } from '../game/discoveries'
 import { useGame } from '../game/store'
-import { PAGE_GRAIN, art } from '../landing/art'
+import { Ending, useEnding } from './Ending'
 import { Wash } from './Wash'
 
 const CARD_SECONDS = 12
 const TOTAL = Object.keys(discoveries).length
-/* The ending: how long the last card is left to be read, and how long the fade to white takes. */
-const ENDING_WAIT_SECONDS = 4
-const ENDING_FADE_SECONDS = 3
 /* A stroke of watercolour from the title's green to the water's blue, for anything that fills up. */
 const STROKE = 'linear-gradient(90deg, rgba(205,240,117,0.9), rgba(143,189,230,0.9))'
 
@@ -46,107 +43,6 @@ export function Hud({
         />
       )}
     </div>
-  )
-}
-
-type EndingPhase = 'waiting' | 'fading' | 'shown' | 'dismissed'
-
-/*
-  The ending, once every point is scored: the last card is left up for a
-  moment, the world fades to white, and then the ending screen appears.
-*/
-function useEnding(enabled: boolean) {
-  const complete = useGame((s) => s.found.length === TOTAL)
-  const [phase, setPhase] = useState<EndingPhase>('waiting')
-
-  useEffect(() => {
-    if (!enabled || !complete) return
-    const fade = setTimeout(() => setPhase('fading'), ENDING_WAIT_SECONDS * 1000)
-    const show = setTimeout(
-      () => {
-        setPhase('shown')
-        // Give the mouse back, for the buttons.
-        document.exitPointerLock()
-      },
-      (ENDING_WAIT_SECONDS + ENDING_FADE_SECONDS) * 1000,
-    )
-    return () => {
-      clearTimeout(fade)
-      clearTimeout(show)
-    }
-  }, [enabled, complete])
-
-  return { phase, dismiss: () => setPhase('dismissed') }
-}
-
-/* The world fades to the landing page's paper, and the ending is written on it. */
-function Ending({ phase, onContinue }: { phase: EndingPhase; onContinue: () => void }) {
-  const found = useGame((s) => s.found)
-  const white = phase === 'fading' || phase === 'shown'
-  const shown = phase === 'shown'
-  return (
-    <div
-      className={`absolute inset-0 bg-paper transition-opacity ease-in ${white ? 'opacity-100' : 'opacity-0'}`}
-      style={{ transitionDuration: `${phase === 'dismissed' ? 1 : ENDING_FADE_SECONDS}s` }}
-    >
-      <div
-        className="absolute inset-0 bg-cover bg-center"
-        style={{ backgroundImage: `url(${art.grain})`, opacity: PAGE_GRAIN }}
-      />
-      <div
-        className={`relative flex h-full flex-col items-center justify-center gap-5 overflow-y-auto px-4 py-8 font-light text-caption transition-all duration-1000 ${shown ? 'pointer-events-auto translate-y-0 opacity-100' : 'translate-y-3 opacity-0'}`}
-      >
-        <p className="m-0 text-2xl tracking-[-0.05em]">nothing left to find.</p>
-        <p className="m-0 text-sm tracking-[-0.02em] tabular-nums">
-          {found.length} / {TOTAL} points
-        </p>
-        <ul className="m-0 grid max-w-2xl list-none grid-cols-1 gap-x-8 gap-y-1 p-0 text-sm tracking-[-0.02em] sm:grid-cols-2">
-          {found.map((id) => (
-            <li key={id}>
-              <span className="text-ink">✓</span> {discoveries[id].title}
-            </li>
-          ))}
-        </ul>
-        <p className="m-0 max-w-md text-center text-sm tracking-[-0.02em] opacity-80">
-          every room here was ordinary. only the way they were joined together was not.
-        </p>
-        <div className="flex gap-3">
-          <PaperButton onClick={onContinue} focusable={shown} seed={31}>
-            keep exploring
-          </PaperButton>
-          <PaperButton onClick={() => location.reload()} focusable={shown} seed={37} bloom>
-            play again
-          </PaperButton>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-/* A button written on a scrap of watercolour paper. */
-function PaperButton({
-  onClick,
-  focusable,
-  seed,
-  bloom = false,
-  children,
-}: {
-  onClick: () => void
-  focusable: boolean
-  seed: number
-  bloom?: boolean
-  children: string
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      tabIndex={focusable ? 0 : -1}
-      className="relative cursor-pointer border-0 bg-transparent px-8 py-4 text-sm font-light tracking-[-0.03em] text-ink transition-transform hover:scale-105"
-    >
-      <Wash rough={9} seed={seed} radius={16} blooms={bloom ? ['blue'] : []} />
-      <span className="relative">{children}</span>
-    </button>
   )
 }
 
