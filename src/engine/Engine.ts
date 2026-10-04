@@ -73,7 +73,9 @@ export class Engine {
   /* Advance and draw one frame. Public so tests and tools can step by hand. */
   frame(dt?: number) {
     this.timer.update()
-    dt ??= Math.min(this.timer.getDelta(), 0.05)
+    // The simulation steps at most 50 ms at a time; the frame rate counts real time.
+    const elapsed = this.timer.getDelta()
+    dt ??= Math.min(elapsed, 0.05)
     if (this.player.locked || !this.running) {
       this.player.update(dt, this.world.colliders, this.world.portals)
       keepNearestSite(this.player, this.world.sites)
@@ -89,7 +91,7 @@ export class Engine {
     this.portalRenderer.render(this.world.scene, this.camera, up)
 
     this.frames++
-    this.statsTime += dt
+    this.statsTime += elapsed
     if (this.statsTime >= 0.5) {
       this.onStats?.({
         fps: Math.round(this.frames / this.statsTime),
