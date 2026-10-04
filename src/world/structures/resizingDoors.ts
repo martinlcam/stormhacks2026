@@ -1,4 +1,3 @@
-import { Site } from '../../engine/planet'
 import { PLANK_TILE, plankMaterial } from '../foliage'
 import type { Structure } from '../World'
 import { glow, matte, palette } from '../materials'
@@ -15,20 +14,18 @@ const RATIO = 0.25
 export function resizingDoors(onResize: () => void, onEnterVault: () => void): Structure {
   return {
     name: 'resizing-doors',
-    // Most of the way round the planet from the start.
-    site: new Site('resizing-doors', -33, -33),
     build(world) {
       const tall = world.addDoor({
         name: 'resize-tall',
-        position: [3, 0, -5],
-        facing: 3,
+        position: [-6, 0, -8],
+        facing: 1,
         overgrown: true,
         backing: matte(palette.stone),
       })
       const small = world.addDoor({
         name: 'resize-small',
-        position: [3, 0, -1],
-        facing: 3,
+        position: [-6, 0, -5],
+        facing: 1,
         scale: RATIO,
         overgrown: true,
         backing: matte(palette.stone),
@@ -38,8 +35,8 @@ export function resizingDoors(onResize: () => void, onEnterVault: () => void): S
       small.onTraverse = onResize
 
       // The vault: a sealed room three metres square, centred on (vx, vz).
-      const vx = -2
-      const vz = 5
+      const vx = -10.5
+      const vz = -1.5
       const gapWidth = 0.4
       const gapHeight = 0.5
       const height = 2.4
