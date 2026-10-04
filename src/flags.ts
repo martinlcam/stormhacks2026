@@ -30,6 +30,11 @@ export const FLAGS = {
     options: ['subtle', 'grainy'],
     about: "The grain in the game's sky",
   },
+  floor: {
+    options: ['canvas', 'rocky'],
+    about:
+      'The ground of the plaza: a canvas that watercolour spreads over behind the player as they walk, or the rocky ground',
+  },
 } as const
 
 export type FlagName = keyof typeof FLAGS

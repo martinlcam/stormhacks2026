@@ -1,6 +1,8 @@
 import { Engine } from '../engine/Engine'
 import { RAINBOW, resetFilm, restoreColours } from '../engine/film'
+import { Paint } from '../engine/paint'
 import { PortalLighting } from '../engine/PortalLighting'
+import { readFlag } from '../flags'
 import { World } from '../world/World'
 import { buildLightingLab } from '../world/lightingLab'
 import { addWorldLamp } from '../world/lamp'
@@ -209,7 +211,10 @@ export function bootstrap(
     worldLamp?.lamp,
   )
   const avatar = new Avatar(world.scene, engine.player, world.portals)
-  world.onUpdate((dt) => {
+  // Watercolour spreads over the canvas floor behind the player as they walk.
+  const paint =
+    !lightingScene && readFlag('floor') === 'canvas' ? new Paint(engine.renderer) : undefined
+  world.onUpdate((dt, time) => {
     items.update(dt)
     // F, held: work the wheel or lever the player is standing at.
     const handle = world.handleAt(engine.player.position, engine.player.site)
@@ -224,6 +229,7 @@ export function bootstrap(
     lightingLab?.update(useLightingSettings.getState(), dt)
     worldLamp?.update()
     worldLantern?.update(true, dt)
+    paint?.update(time, engine.player)
   })
 
   if (paused) {
@@ -239,7 +245,13 @@ export function bootstrap(
 
   if (import.meta.env.DEV) {
     // Handy in the console: __engine.player.position.set(...), __game.getState().discover(...)
-    Object.assign(window, { __engine: engine, __items: items, __sound: sound, __game: useGame })
+    Object.assign(window, {
+      __engine: engine,
+      __items: items,
+      __sound: sound,
+      __game: useGame,
+      __paint: paint,
+    })
   }
 
   return {
@@ -253,6 +265,7 @@ export function bootstrap(
       lightingLab?.dispose()
       worldLamp?.dispose()
       worldLantern?.dispose()
+      paint?.dispose()
       engine.dispose()
     },
   }

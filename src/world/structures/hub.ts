@@ -1,5 +1,7 @@
 import * as THREE from 'three'
+import { readFlag } from '../../flags'
 import type { Structure } from '../World'
+import { canvasGround } from '../canvasFloor'
 import { groundDisk } from '../groundDisk'
 import { glow, palette, rockyGround, Sky } from '../materials'
 
@@ -26,7 +28,8 @@ export const hub: Structure = {
     world.planetSize = CIRCUMFERENCE
 
     const reach = CIRCUMFERENCE / 2
-    const ground = new THREE.Mesh(groundDisk(reach, 120, 128), rockyGround())
+    const floor = readFlag('floor') === 'canvas' ? canvasGround() : rockyGround()
+    const ground = new THREE.Mesh(groundDisk(reach, 120, 128), floor)
     ground.frustumCulled = false
     world.scene.add(ground)
     // On the map the ground is a flat slab under the whole disk.
