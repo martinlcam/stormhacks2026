@@ -12,7 +12,7 @@ export const discoveries = {
   'bigger-inside': {
     id: 'bigger-inside',
     title: 'Bigger on the inside',
-    body: 'The booth is two metres wide. The hall inside it is fourteen.',
+    body: 'The booth is two metres wide. The classroom inside it is nine, with sixteen desks and a row of windows.',
     maths:
       'Both rooms are perfectly ordinary. Only the way they are glued together is strange: the doorway identifies two patches of space that are nowhere near each other.',
   },
