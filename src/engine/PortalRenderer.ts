@@ -9,6 +9,19 @@ import type { PortalLighting } from './PortalLighting'
 */
 const NO_CLIP = new THREE.Plane(new THREE.Vector3(0, 1, 0), 1e6)
 
+/* A rectangle on the screen, from -1 to 1 each way. */
+interface Rect {
+  minX: number
+  minY: number
+  maxX: number
+  maxY: number
+}
+
+const WHOLE_SCREEN: Rect = { minX: -1, minY: -1, maxX: 1, maxY: 1 }
+/* Added round a doorway's rectangle, since a doorway on the planet is drawn slightly bent. */
+const RECT_MARGIN = 0.02
+const clipCorner = new THREE.Vector4()
+
 /*
   Objects on this layer are left out of the player's own view and drawn only
   in views through portals: the parts of the player that surround the eye.
@@ -84,6 +97,8 @@ export class PortalRenderer {
   private readonly cameras: THREE.PerspectiveCamera[] = []
   private readonly ups: THREE.Vector3[] = []
   private readonly visibleLists: Portal[][] = []
+  /* Where on the screen each visible portal is, for each level. */
+  private readonly rects: Map<Portal, Rect>[] = []
   private readonly flatLists: Portal[][] = []
   private readonly frustum = new THREE.Frustum()
   private readonly viewProjection = new THREE.Matrix4()
@@ -119,7 +134,7 @@ export class PortalRenderer {
     this.portalLighting?.update()
     this.collectMaterials(scene)
     this.renderer.clear(true, true, true)
-    this.renderLevel(scene, camera, 0, null, up, this.maxPasses, 0)
+    this.renderLevel(scene, camera, 0, null, up, this.maxPasses, 0, WHOLE_SCREEN)
   }
 
   private renderLevel(
@@ -132,9 +147,11 @@ export class PortalRenderer {
     allowance: number,
     /* How many doors this view looks through. Seams are not doors. */
     doors: number,
+    /* The part of the screen this view is seen in: the doorway it is looked at through. */
+    window: Rect,
   ) {
     const clip = exit ? exit.spacePlane : NO_CLIP
-    const visible = this.findVisible(camera, level, exit)
+    const visible = this.findVisible(camera, level, exit, window)
     // Doorways that are not looked through: out of depth or out of budget.
     const flat = (this.flatLists[level] ??= [])
     flat.length = 0
@@ -178,6 +195,7 @@ export class PortalRenderer {
           virtualUp,
           childAllowance,
           doors + (portal.seamless ? 0 : 1),
+          this.rects[level].get(portal)!,
         )
 
         // 3. unmark
@@ -228,9 +246,16 @@ export class PortalRenderer {
     Portals this camera faces and has in view, farthest first so nearer
     portals paint over farther ones where they overlap on screen.
   */
-  private findVisible(camera: THREE.PerspectiveCamera, level: number, exit: Portal | null) {
+  private findVisible(
+    camera: THREE.PerspectiveCamera,
+    level: number,
+    exit: Portal | null,
+    window: Rect,
+  ) {
     const list = (this.visibleLists[level] ??= [])
     list.length = 0
+    const rects = (this.rects[level] ??= new Map())
+    rects.clear()
     this.viewProjection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)
     this.frustum.setFromProjectionMatrix(this.viewProjection)
     const eye = this.eye.setFromMatrixPosition(camera.matrixWorld)
@@ -240,11 +265,39 @@ export class PortalRenderer {
       this.sphere.center.copy(portal.spaceCenter)
       this.sphere.radius = portal.radius
       if (!this.frustum.intersectsSphere(this.sphere)) continue
+      // A view through a doorway shows only what is behind that doorway on
+      // the screen. A portal elsewhere in the camera's view is not in it.
+      const rect = this.onScreen(portal, window)
+      if (!rect) continue
+      rects.set(portal, rect)
       list.push(portal)
     }
     const at = eye.clone()
     list.sort((a, b) => b.spaceCenter.distanceToSquared(at) - a.spaceCenter.distanceToSquared(at))
     return list
+  }
+
+  /*
+    The part of `window` that a portal's opening covers on the screen, or
+    null if it covers none of it. Uses `viewProjection`, set by `findVisible`.
+  */
+  private onScreen(portal: Portal, window: Rect): Rect | null {
+    const rect = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity }
+    for (const corner of portal.spaceCorners) {
+      clipCorner.set(corner.x, corner.y, corner.z, 1).applyMatrix4(this.viewProjection)
+      // A corner beside or behind the eye has no place on the screen; the
+      // opening may then cover any of it.
+      if (clipCorner.w < 1e-3) return window
+      rect.minX = Math.min(rect.minX, clipCorner.x / clipCorner.w)
+      rect.maxX = Math.max(rect.maxX, clipCorner.x / clipCorner.w)
+      rect.minY = Math.min(rect.minY, clipCorner.y / clipCorner.w)
+      rect.maxY = Math.max(rect.maxY, clipCorner.y / clipCorner.w)
+    }
+    rect.minX = Math.max(window.minX, rect.minX - RECT_MARGIN)
+    rect.maxX = Math.min(window.maxX, rect.maxX + RECT_MARGIN)
+    rect.minY = Math.max(window.minY, rect.minY - RECT_MARGIN)
+    rect.maxY = Math.min(window.maxY, rect.maxY + RECT_MARGIN)
+    return rect.minX < rect.maxX && rect.minY < rect.maxY ? rect : null
   }
 
   /* The site of a mesh: its own, or that of the nearest group above it that has one. */
