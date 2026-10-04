@@ -1,12 +1,12 @@
 import type { Structure } from '../World'
 import { glow, matte, palette } from '../materials'
 
-/**
- * Two doors eight metres apart, facing each other, joined to one another.
- * The strip between them has no ends: walk through one door and you come out
- * of the other, so straight ahead leads back to where you started. Looking
- * through either door you see the same strip repeating into the distance.
- */
+/*
+  Two doors eight metres apart, facing each other, joined to one another.
+  The strip between them has no ends: walk through one door and you come out
+  of the other, so straight ahead leads back to where you started. Looking
+  through either door you see the same strip repeating into the distance.
+*/
 export function loopCorridor(onEnter: () => void): Structure {
   return {
     name: 'loop-corridor',

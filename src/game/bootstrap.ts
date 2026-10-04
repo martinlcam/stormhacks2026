@@ -6,10 +6,10 @@ import { loopCorridor } from '../world/structures/loopCorridor'
 import { resizingDoors } from '../world/structures/resizingDoors'
 import { useGame } from './store'
 
-/**
- * Build the sandbox, start the engine and wire both to the store.
- * Returns a function that tears everything down again.
- */
+/*
+  Build the sandbox, start the engine and wire both to the store.
+  Returns a function that tears everything down again.
+*/
 export function bootstrap(canvas: HTMLCanvasElement): () => void {
   const game = useGame.getState()
 

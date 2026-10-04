@@ -13,7 +13,7 @@ const JUMP_SPEED = 5.2
 const GRAVITY = 16
 const MOUSE_SENSITIVITY = 0.0022
 const MAX_PITCH = Math.PI / 2 - 0.01
-/** Longest distance moved per collision step; keeps fast frames from tunnelling. */
+/* Longest distance moved per collision step; keeps fast frames from tunnelling. */
 const MAX_STEP = 0.1
 
 const wish = new THREE.Vector3()
@@ -21,24 +21,24 @@ const before = new THREE.Vector3()
 const localBefore = new THREE.Vector3()
 const localAfter = new THREE.Vector3()
 
-/**
- * First-person walker: a vertical cylinder against axis-aligned boxes, with
- * step-up for stairs, and seamless travel through portals.
- */
+/*
+  First-person walker: a vertical cylinder against axis-aligned boxes, with
+  step-up for stairs, and seamless travel through portals.
+*/
 export class PlayerController {
-  /** Feet position. */
+  /* Feet position. */
   readonly position = new THREE.Vector3()
   readonly velocity = new THREE.Vector3()
   yaw = 0
   pitch = 0
-  /**
-   * Size relative to normal. Every length the player owns (body, stride,
-   * jump, gravity, eye height) is multiplied by it, so being small feels
-   * exactly like being normal-sized in a world that grew.
-   */
+  /*
+    Size relative to normal. Every length the player owns (body, stride,
+    jump, gravity, eye height) is multiplied by it, so being small feels
+    exactly like being normal-sized in a world that grew.
+  */
   scale = 1
   onGround = false
-  /** Where to put the player back if they fall out of the world. */
+  /* Where to put the player back if they fall out of the world. */
   readonly spawn = new THREE.Vector3()
   spawnYaw = 0
   onLockChange?: (locked: boolean) => void
@@ -190,7 +190,7 @@ export class PlayerController {
     return portal.fits(RADIUS * 2 * this.scale, HEIGHT * this.scale)
   }
 
-  /** Carry the player through any portal their path crossed this step. */
+  /* Carry the player through any portal their path crossed this step. */
   private traverse(portals: readonly Portal[]) {
     for (const portal of portals) {
       portal.toLocal(before, localBefore)

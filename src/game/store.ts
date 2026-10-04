@@ -2,17 +2,17 @@ import { create } from 'zustand'
 import { type Discovery, type DiscoveryId, discoveries } from './discoveries'
 
 interface GameState {
-  /** True while the mouse is captured and the player is in control. */
+  /* True while the mouse is captured and the player is in control. */
   playing: boolean
   fps: number
   passes: number
-  /** The player's size relative to normal. */
+  /* The player's size relative to normal. */
   scale: number
-  /** Ids of everything found so far, in order. */
+  /* Ids of everything found so far, in order. */
   found: DiscoveryId[]
-  /** The card currently on screen, if any. */
+  /* The card currently on screen, if any. */
   card: Discovery | null
-  /** Hint for whatever the crosshair is on, e.g. "E  pick up". */
+  /* Hint for whatever the crosshair is on, e.g. "E  pick up". */
   prompt: string | null
 
   setPlaying(playing: boolean): void
@@ -22,10 +22,10 @@ interface GameState {
   dismissCard(): void
 }
 
-/**
- * The only thing the engine side and the React side share. The game layer
- * writes to it; the HUD reads from it.
- */
+/*
+  The only thing the engine side and the React side share. The game layer
+  writes to it; the HUD reads from it.
+*/
 export const useGame = create<GameState>((set, get) => ({
   playing: false,
   fps: 0,

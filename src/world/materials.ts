@@ -9,7 +9,7 @@ export const palette = {
   bone: 0xe8e2f0,
 }
 
-/** A tiling grid, so that movement and distance are readable on flat surfaces. */
+/* A tiling grid, so that movement and distance are readable on flat surfaces. */
 export function gridTexture(background: string, line: string, repeat: number): THREE.Texture {
   const size = 128
   const canvas = document.createElement('canvas')
@@ -41,10 +41,10 @@ export function glow(color: number, intensity = 1.6): THREE.MeshStandardMaterial
   })
 }
 
-/**
- * A gradient sky drawn around whichever camera is rendering. It ignores the
- * camera's position, so it looks the same from every side of every portal.
- */
+/*
+  A gradient sky drawn around whichever camera is rendering. It ignores the
+  camera's position, so it looks the same from every side of every portal.
+*/
 export function createSky(): THREE.Mesh {
   const material = new THREE.ShaderMaterial({
     side: THREE.BackSide,

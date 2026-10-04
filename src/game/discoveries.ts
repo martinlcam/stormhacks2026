@@ -1,13 +1,13 @@
 export interface Discovery {
   id: string
   title: string
-  /** What the player just experienced, in plain words. */
+  /* What the player just experienced, in plain words. */
   body: string
-  /** The mathematics behind it, one or two sentences. */
+  /* The mathematics behind it, one or two sentences. */
   maths: string
 }
 
-/** Every discovery in the sandbox. Structures unlock these by id. */
+/* Every discovery in the sandbox. Structures unlock these by id. */
 export const discoveries = {
   'bigger-inside': {
     id: 'bigger-inside',

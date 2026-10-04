@@ -1,33 +1,33 @@
 import * as THREE from 'three'
 
-/**
- * World curvature.
- *
- * The plaza is stored, simulated and collided as a flat square. It is only
- * drawn as a ball: the vertex shader wraps the flat ground around a sphere
- * that touches it at a chosen centre (the exponential map of the sphere).
- * For a point at horizontal distance d from the centre and height h,
- *
- *   θ = d / R
- *   horizontal distance → (R + h) · sin θ
- *   height              → (R + h) · cos θ − R
- *
- * Distances along any line through the centre are exact and vertical lines
- * stay straight, so nothing near the centre is distorted and the ground
- * under the player is always level. Sideways lengths shrink by sin θ / θ,
- * which only becomes visible near the horizon.
- *
- * The plaza also repeats: its side is one full circumference (2πR), and the
- * shader moves each object by whole plaza widths to the copy nearest the
- * centre. Walking straight therefore brings you back to where you began.
- *
- * Only objects inside the plaza are bent. Detached rooms stay flat.
- */
+/*
+  World curvature.
+
+  The plaza is stored, simulated and collided as a flat square. It is only
+  drawn as a ball: the vertex shader wraps the flat ground around a sphere
+  that touches it at a chosen centre (the exponential map of the sphere).
+  For a point at horizontal distance d from the centre and height h,
+
+    θ = d / R
+    horizontal distance → (R + h) · sin θ
+    height              → (R + h) · cos θ − R
+
+  Distances along any line through the centre are exact and vertical lines
+  stay straight, so nothing near the centre is distorted and the ground
+  under the player is always level. Sideways lengths shrink by sin θ / θ,
+  which only becomes visible near the horizon.
+
+  The plaza also repeats: its side is one full circumference (2πR), and the
+  shader moves each object by whole plaza widths to the copy nearest the
+  centre. Walking straight therefore brings you back to where you began.
+
+  Only objects inside the plaza are bent. Detached rooms stay flat.
+*/
 
 const planet = {
-  /** Half the plaza's side. Zero means no curvature anywhere. */
+  /* Half the plaza's side. Zero means no curvature anywhere. */
   half: 0,
-  /** 1 / R. */
+  /* 1 / R. */
   k: 0,
 }
 
@@ -37,7 +37,7 @@ const uniforms = {
   uPlazaHalf: { value: 0 },
 }
 
-/** Turn the square plaza of this side length into a planet. */
+/* Turn the square plaza of this side length into a planet. */
 export function configurePlanet(size: number | null) {
   planet.half = size ? size / 2 : 0
   planet.k = size ? (2 * Math.PI) / size : 0
@@ -52,12 +52,12 @@ function insidePlaza(x: number, z: number): boolean {
   return planet.half > 0 && Math.abs(x) <= planet.half && Math.abs(z) <= planet.half
 }
 
-/** Curvature that applies when the world is drawn around this point. */
+/* Curvature that applies when the world is drawn around this point. */
 export function curvatureAt(point: THREE.Vector3): number {
   return insidePlaza(point.x, point.z) ? planet.k : 0
 }
 
-/** Choose the centre and curvature for the draw calls that follow. */
+/* Choose the centre and curvature for the draw calls that follow. */
 export function setBend(centre: THREE.Vector3, k: number) {
   uniforms.uBendCentre.value.copy(centre)
   uniforms.uBendK.value = k
@@ -98,7 +98,7 @@ mvPosition = viewMatrix * bentPosition;
 gl_Position = projectionMatrix * mvPosition;
 `
 
-/** Make a built-in material draw its geometry bent. Call before first use. */
+/* Make a built-in material draw its geometry bent. Call before first use. */
 export function bendMaterial(material: THREE.Material) {
   if (material.userData.bent || (material as THREE.ShaderMaterial).isShaderMaterial) return
   material.userData.bent = true
@@ -115,12 +115,12 @@ const axis = new THREE.Vector3()
 const rotation = new THREE.Matrix4()
 const translation = new THREE.Matrix4()
 
-/**
- * The rigid motion that best describes what bending does to a small object
- * standing at `foot`: it is carried to its place on the sphere and tipped to
- * stand upright there. The portal renderer uses this to line a flat view up
- * with a doorway that is drawn bent.
- */
+/*
+  The rigid motion that best describes what bending does to a small object
+  standing at `foot`: it is carried to its place on the sphere and tipped to
+  stand upright there. The portal renderer uses this to line a flat view up
+  with a doorway that is drawn bent.
+*/
 export function apparentMotion(
   foot: THREE.Vector3,
   centre: THREE.Vector3,
@@ -154,7 +154,7 @@ export function apparentMotion(
   return out
 }
 
-/** Bring a walker who has left one edge of the plaza back in at the other. */
+/* Bring a walker who has left one edge of the plaza back in at the other. */
 export function wrapToPlaza(position: THREE.Vector3) {
   const { half } = planet
   // Detached rooms lie far outside the plaza and must not be wrapped.

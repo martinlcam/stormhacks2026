@@ -1,15 +1,15 @@
 import type { Structure } from '../World'
 import { glow, matte, palette } from '../materials'
 
-/** How much smaller the small door is, and so how much it shrinks you. */
+/* How much smaller the small door is, and so how much it shrinks you. */
 const RATIO = 0.25
 
-/**
- * A full-size door joined to one a quarter of its size. Going in the tall
- * door brings you out of the small one at a quarter scale; going back in the
- * small one restores you. Nearby stands a vault whose only way in is a gap
- * too low for anyone full-sized.
- */
+/*
+  A full-size door joined to one a quarter of its size. Going in the tall
+  door brings you out of the small one at a quarter scale; going back in the
+  small one restores you. Nearby stands a vault whose only way in is a gap
+  too low for anyone full-sized.
+*/
 export function resizingDoors(onResize: () => void, onEnterVault: () => void): Structure {
   return {
     name: 'resizing-doors',

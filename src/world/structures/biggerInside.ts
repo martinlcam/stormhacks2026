@@ -2,13 +2,13 @@ import * as THREE from 'three'
 import type { Structure } from '../World'
 import { glow, gridTexture, matte, palette } from '../materials'
 
-/** Detached rooms live far from the hub so they are never seen directly. */
+/* Detached rooms live far from the hub so they are never seen directly. */
 const HALL_X = 600
 
-/**
- * A booth two metres across whose door opens onto a hall far too large to fit
- * inside it. Walk around the booth, then walk in.
- */
+/*
+  A booth two metres across whose door opens onto a hall far too large to fit
+  inside it. Walk around the booth, then walk in.
+*/
 export function biggerInside(onEnter: () => void): Structure {
   return {
     name: 'bigger-inside',

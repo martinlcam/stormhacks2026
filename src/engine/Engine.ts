@@ -6,19 +6,19 @@ import { PortalRenderer } from './PortalRenderer'
 
 export interface FrameStats {
   fps: number
-  /** How many times the world was drawn this frame (1 + portal views). */
+  /* How many times the world was drawn this frame (1 + portal views). */
   passes: number
-  /** The player's size relative to normal: 0.25 is a quarter height. */
+  /* The player's size relative to normal: 0.25 is a quarter height. */
   scale: number
 }
 
-/** Owns the canvas, the frame loop, the player and the portal renderer. */
+/* Owns the canvas, the frame loop, the player and the portal renderer. */
 export class Engine {
   readonly renderer: THREE.WebGLRenderer
   readonly camera = new THREE.PerspectiveCamera(75, 1, 0.05, 150)
   readonly player: PlayerController
   readonly portalRenderer: PortalRenderer
-  /** Reported about twice a second. */
+  /* Reported about twice a second. */
   onStats?: (stats: FrameStats) => void
 
   private readonly timer = new THREE.Timer()
@@ -57,7 +57,7 @@ export class Engine {
     this.renderer.dispose()
   }
 
-  /** Advance and draw one frame. Public so tests and tools can step by hand. */
+  /* Advance and draw one frame. Public so tests and tools can step by hand. */
   frame(dt?: number) {
     this.timer.update()
     dt ??= Math.min(this.timer.getDelta(), 0.05)

@@ -2,14 +2,14 @@ import * as THREE from 'three'
 import type { Structure } from '../World'
 import { createSky, glow, gridTexture, matte, palette } from '../materials'
 
-/**
- * Side of the plaza. It is drawn as a planet whose circumference is this
- * length, so the radius is SIZE / 2π, about 38 m.
- */
+/*
+  Side of the plaza. It is drawn as a planet whose circumference is this
+  length, so the radius is SIZE / 2π, about 38 m.
+*/
 const SIZE = 240
 const TILE = 20
 
-/** The open plaza every other structure stands on. */
+/* The open plaza every other structure stands on. */
 export const hub: Structure = {
   name: 'hub',
   build(world) {

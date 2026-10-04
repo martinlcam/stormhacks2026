@@ -2,44 +2,46 @@ import * as THREE from 'three'
 import { apparentMotion, bendMaterial, curvatureAt, setBend } from './bend'
 import type { Portal } from './Portal'
 
-/** A plane that keeps everything, so the clipping-plane count never changes
- *  between passes (changing it would recompile every shader). */
+/*
+  A plane that keeps everything, so the clipping-plane count never changes
+   between passes (changing it would recompile every shader).
+*/
 const NO_CLIP = new THREE.Plane(new THREE.Vector3(0, 1, 0), 1e6)
 
-/**
- * Draws a scene containing portals using the stencil buffer.
- *
- * For a camera at recursion level L (0 = the player's eye) the stencil value
- * L marks "pixels this level owns". For each portal the camera can see:
- *
- *   1. mark    draw the portal surface, stencil L → L+1, no colour or depth
- *   2. inside  draw the world again from a virtual camera (the real camera
- *              carried through the portal), restricted to stencil L+1; this
- *              step recurses for portals visible through the portal
- *   3. unmark  draw the surface again, stencil L+1 → L
- *
- * then, once every portal's interior is painted:
- *
- *   4. seal    clear depth and write only the portal surfaces' depth, so the
- *              world behind a portal cannot paint over its interior while
- *              anything in front of it still can
- *   5. world   draw the scene where stencil = L
- *
- * Each virtual view is clipped at the destination portal's plane so the wall
- * behind the exit never blocks the view.
- *
- * Curvature: every pass is drawn bent around a centre (see bend.ts). The
- * player's own view is centred on the player. A view through a portal is
- * centred on the far door, so the far side is undistorted where it meets the
- * doorway, and the virtual camera is moved by the inverse of the bend's
- * motion at the near door, so the two sides line up.
- */
+/*
+  Draws a scene containing portals using the stencil buffer.
+
+  For a camera at recursion level L (0 = the player's eye) the stencil value
+  L marks "pixels this level owns". For each portal the camera can see:
+
+    1. mark    draw the portal surface, stencil L → L+1, no colour or depth
+    2. inside  draw the world again from a virtual camera (the real camera
+               carried through the portal), restricted to stencil L+1; this
+               step recurses for portals visible through the portal
+    3. unmark  draw the surface again, stencil L+1 → L
+
+  then, once every portal's interior is painted:
+
+    4. seal    clear depth and write only the portal surfaces' depth, so the
+               world behind a portal cannot paint over its interior while
+               anything in front of it still can
+    5. world   draw the scene where stencil = L
+
+  Each virtual view is clipped at the destination portal's plane so the wall
+  behind the exit never blocks the view.
+
+  Curvature: every pass is drawn bent around a centre (see bend.ts). The
+  player's own view is centred on the player. A view through a portal is
+  centred on the far door, so the far side is undistorted where it meets the
+  doorway, and the virtual camera is moved by the inverse of the bend's
+  motion at the near door, so the two sides line up.
+*/
 export class PortalRenderer {
-  /** Portals seen through portals seen through portals… */
+  /* Portals seen through portals seen through portals… */
   maxDepth = 4
-  /** What a portal looks like once the recursion budget runs out. */
+  /* What a portal looks like once the recursion budget runs out. */
   readonly depthLimitColor = new THREE.Color(0x120a1c)
-  /** Scene passes drawn last frame, for the debug HUD. */
+  /* Scene passes drawn last frame, for the debug HUD. */
   passes = 0
 
   private readonly clipPlane = NO_CLIP.clone()
@@ -69,7 +71,7 @@ export class PortalRenderer {
   private readonly point = new THREE.Vector3()
   private readonly sphere = new THREE.Sphere()
   private readonly scratch = new THREE.Matrix4()
-  /** Per recursion level, per portal: how bending moves that doorway. */
+  /* Per recursion level, per portal: how bending moves that doorway. */
   private readonly motions: THREE.Matrix4[][] = []
   private readonly worldMaterials = new Set<THREE.Material>()
   private portals: readonly Portal[] = []
@@ -92,7 +94,7 @@ export class PortalRenderer {
     }
   }
 
-  /** `centre` is the point the world is bent around: the player's feet. */
+  /* `centre` is the point the world is bent around: the player's feet. */
   render(scene: THREE.Scene, camera: THREE.PerspectiveCamera, centre: THREE.Vector3) {
     this.passes = 0
     this.collectMaterials(scene)
@@ -170,8 +172,10 @@ export class PortalRenderer {
     for (const portal of portals) portal.mesh.visible = false
   }
 
-  /** Portals this camera faces and has in view, farthest first so nearer
-   *  portals paint over farther ones where they overlap on screen. */
+  /*
+    Portals this camera faces and has in view, farthest first so nearer
+     portals paint over farther ones where they overlap on screen.
+  */
   private findVisible(
     camera: THREE.PerspectiveCamera,
     level: number,
@@ -216,8 +220,10 @@ export class PortalRenderer {
     return camera
   }
 
-  /** Every world material has to honour the stencil mask. Done per frame so
-   *  structures can add meshes at any time without registering them. */
+  /*
+    Every world material has to honour the stencil mask. Done per frame so
+     structures can add meshes at any time without registering them.
+  */
   private collectMaterials(scene: THREE.Scene) {
     this.worldMaterials.clear()
     scene.traverse((object) => {

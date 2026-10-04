@@ -3,34 +3,34 @@ import { Portal } from '../engine/Portal'
 
 type Vec3 = readonly [number, number, number]
 
-/** Longest box edge, in metres, drawn without extra vertices. */
+/* Longest box edge, in metres, drawn without extra vertices. */
 const SEGMENT = 2
 
 export interface BoxOptions {
   size: Vec3
-  /** Centre of the box. */
+  /* Centre of the box. */
   position: Vec3
   material: THREE.Material
-  /** Solid to the player. Defaults to true. */
+  /* Solid to the player. Defaults to true. */
   collide?: boolean
 }
 
 export interface DoorOptions {
   name: string
-  /** Bottom centre of the opening. */
+  /* Bottom centre of the opening. */
   position: Vec3
-  /** Which way the front faces, in quarter turns: 0 = +Z, 1 = +X, 2 = -Z, 3 = -X. */
+  /* Which way the front faces, in quarter turns: 0 = +Z, 1 = +X, 2 = -Z, 3 = -X. */
   facing: 0 | 1 | 2 | 3
   width?: number
   height?: number
-  /** Shrinks or grows the whole door, frame included. Defaults to 1. */
+  /* Shrinks or grows the whole door, frame included. Defaults to 1. */
   scale?: number
   frameMaterial: THREE.Material
-  /** Build a slab behind the opening, for doors that stand in the open. */
+  /* Build a slab behind the opening, for doors that stand in the open. */
   backing?: THREE.Material
 }
 
-/** A self-contained piece of the sandbox. One file per impossible structure. */
+/* A self-contained piece of the sandbox. One file per impossible structure. */
 export interface Structure {
   name: string
   build(world: World): void
@@ -38,19 +38,19 @@ export interface Structure {
 
 export type Updater = (dt: number, time: number) => void
 
-/**
- * The sandbox as data: meshes to draw, boxes to collide with, portals linking
- * places together. Structures only ever talk to this class, never the engine.
- * Everything solid is an axis-aligned box.
- */
+/*
+  The sandbox as data: meshes to draw, boxes to collide with, portals linking
+  places together. Structures only ever talk to this class, never the engine.
+  Everything solid is an axis-aligned box.
+*/
 export class World {
   readonly scene = new THREE.Scene()
   readonly colliders: THREE.Box3[] = []
   readonly portals: Portal[] = []
-  /**
-   * Side of the square plaza around the origin that is drawn as a planet, or
-   * null for a flat world. Walking off one edge enters at the opposite edge.
-   */
+  /*
+    Side of the square plaza around the origin that is drawn as a planet, or
+    null for a flat world. Walking off one edge enters at the opposite edge.
+  */
   planetSize: number | null = null
   private readonly updaters: Updater[] = []
   private readonly triggers: { box: THREE.Box3; inside: boolean; onEnter: () => void }[] = []
@@ -69,15 +69,15 @@ export class World {
     return mesh
   }
 
-  /** Something solid with nothing to draw. */
+  /* Something solid with nothing to draw. */
   addCollider(min: Vec3, max: Vec3) {
     this.colliders.push(new THREE.Box3(new THREE.Vector3(...min), new THREE.Vector3(...max)))
   }
 
-  /**
-   * A doorway with a portal in it: two jambs and a lintel around the opening.
-   * The portal goes nowhere until it is passed to `link`.
-   */
+  /*
+    A doorway with a portal in it: two jambs and a lintel around the opening.
+    The portal goes nowhere until it is passed to `link`.
+  */
   addDoor(options: DoorOptions): Portal {
     const { position, facing, width = 1.2, height = 2.2, scale = 1, frameMaterial } = options
     const yaw = (facing * Math.PI) / 2
@@ -126,13 +126,13 @@ export class World {
     return portal
   }
 
-  /** Join two doors so that walking into one comes out of the other. */
+  /* Join two doors so that walking into one comes out of the other. */
   link(a: Portal, b: Portal) {
     a.link(b)
     b.link(a)
   }
 
-  /** Run `onEnter` each time the player's feet move into the box. */
+  /* Run `onEnter` each time the player's feet move into the box. */
   addTrigger(min: Vec3, max: Vec3, onEnter: () => void) {
     const box = new THREE.Box3(new THREE.Vector3(...min), new THREE.Vector3(...max))
     this.triggers.push({ box, inside: false, onEnter })
@@ -154,7 +154,7 @@ export class World {
     for (const updater of this.updaters) updater(dt, time)
   }
 
-  /** Call once after every structure is built. */
+  /* Call once after every structure is built. */
   finalize() {
     for (const portal of this.portals) {
       if (!portal.target) throw new Error(`Portal "${portal.name}" was never linked`)
