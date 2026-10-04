@@ -130,7 +130,7 @@ function classroom(world: Parameters<Structure['build']>[0]) {
   const ceiling = new THREE.MeshStandardMaterial({
     color: 0xf2efe6,
     emissive: 0xf2efe6,
-    emissiveIntensity: 0.45,
+    emissiveIntensity: 0.06,
     roughness: 0.9,
   })
   built(ceiling, [WIDTH + WALL * 2, WALL, DEPTH + WALL * 2], [0, HEIGHT + WALL / 2, 0])
@@ -279,7 +279,12 @@ function classroom(world: Parameters<Structure['build']>[0]) {
   // The globe turns, slowly.
   const globe = new THREE.Mesh(
     new THREE.SphereGeometry(0.16, 24, 16),
-    new THREE.MeshStandardMaterial({ color: 0x3f7fb0, roughness: 0.6, emissive: 0x16324a }),
+    new THREE.MeshStandardMaterial({
+      color: 0x3f7fb0,
+      roughness: 0.6,
+      emissive: 0x16324a,
+      emissiveIntensity: 0.3,
+    }),
   )
   globe.position.set(ROOM_X - 2.7, 1.08, -4.1)
   world.scene.add(globe)

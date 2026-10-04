@@ -16,8 +16,10 @@ export const hub: Structure = {
     world.scene.fog = new THREE.Fog(palette.night, 40, 140)
     world.sky = new Sky()
     world.scene.add(world.sky.mesh)
-    world.scene.add(new THREE.HemisphereLight(0xcdb8ff, 0x1a1024, 1.1))
-    const sun = new THREE.DirectionalLight(0xffffff, 1.4)
+    // Only enough light from the sky to make out shapes: the lamp the
+    // player carries is what lights the world.
+    world.scene.add(new THREE.HemisphereLight(0xcdb8ff, 0x1a1024, 0.12))
+    const sun = new THREE.DirectionalLight(0xffffff, 0.1)
     sun.position.set(30, 60, 20)
     world.scene.add(sun)
 

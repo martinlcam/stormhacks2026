@@ -164,11 +164,14 @@ export function matte(color: number): THREE.MeshStandardMaterial {
   return new THREE.MeshStandardMaterial({ color, roughness: 0.85 })
 }
 
+/* How much of its stated brightness a glowing thing keeps: an ember, not a lamp. */
+const GLOW = 0.3
+
 export function glow(color: number, intensity = 1.6): THREE.MeshStandardMaterial {
   return new THREE.MeshStandardMaterial({
     color,
     emissive: color,
-    emissiveIntensity: intensity,
+    emissiveIntensity: intensity * GLOW,
     roughness: 0.4,
   })
 }
@@ -213,6 +216,9 @@ export function createSky(top = 0x05030a, horizon = 0x3a1a52): THREE.Mesh {
   return sky
 }
 
+/* How much of its colour a sky keeps. It is night under every one of them. */
+const SKY_DIM = 0.15
+
 /*
   The skies, each as three colours: overhead, part of the way down, and at
   the horizon. The first two are the dusk and the storm from the landing
@@ -225,7 +231,7 @@ const SKIES = [
   [0x071a2b, 0x1f5f7a, 0x9fe0c9],
   [0x1c2242, 0x7d6aa8, 0xf7d9b0],
   [0x05030a, 0x2a1340, 0x8a4aa0],
-].map((sky) => sky.map((colour) => new THREE.Color(colour)))
+].map((sky) => sky.map((colour) => new THREE.Color(colour).multiplyScalar(SKY_DIM)))
 
 /*
   A sky drawn around whichever camera is rendering: a gradient from the

@@ -56,7 +56,7 @@ function StartScreen({ onPlay }: { onPlay: () => void }) {
       className="pointer-events-auto absolute inset-0 flex cursor-pointer flex-col items-center justify-center gap-6 bg-night/70 backdrop-blur-sm"
     >
       <h1 className="bg-linear-to-r from-purple to-cyan bg-clip-text text-6xl font-bold tracking-tight text-transparent">
-        Beyond Euclid
+        WÚ 無
       </h1>
       <p className="text-lg text-bone/80">Click to enter</p>
       <p className="max-w-sm px-4 text-center text-sm text-bone/80">

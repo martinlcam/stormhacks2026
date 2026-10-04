@@ -53,6 +53,29 @@ export class Sound {
       voice.start()
       return voice
     })
+
+    // Soft rain that never stops: six seconds of faint hiss with a drop
+    // here and there, each as loud as it likes, played round and round.
+    // The filters keep it warm: no rumble below, nothing sharp above.
+    const rain = context.createBuffer(1, context.sampleRate * 6, context.sampleRate)
+    const drops = rain.getChannelData(0)
+    for (let i = 0; i < drops.length; i++) {
+      const drop = Math.random() < 0.0015 ? 0.3 + Math.random() * 0.7 : 0.1
+      drops[i] = (Math.random() * 2 - 1) * drop
+    }
+    const falling = context.createBufferSource()
+    falling.buffer = rain
+    falling.loop = true
+    const lift = context.createBiquadFilter()
+    lift.type = 'highpass'
+    lift.frequency.value = 400
+    const warm = context.createBiquadFilter()
+    warm.type = 'lowpass'
+    warm.frequency.value = 3800
+    const wet = context.createGain()
+    wet.gain.value = 0.35
+    falling.connect(lift).connect(warm).connect(wet).connect(this.master)
+    falling.start()
   }
 
   /* M: turn all sound off or back on. */

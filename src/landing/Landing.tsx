@@ -122,8 +122,13 @@ export function Landing({ onEnter }: { onEnter: () => void }) {
             ref={title}
             className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-5 text-center"
           >
-            <p className="text-xs tracking-[0.4em] text-bone/70 uppercase">A story in one scroll</p>
-            <h1 className="font-serif text-6xl tracking-tight italic sm:text-8xl">Beyond Euclid</h1>
+            <p className="text-xs tracking-[0.4em] text-bone/70 uppercase">A web experience</p>
+            <h1 className="font-serif text-6xl tracking-tight italic sm:text-8xl">
+              WÚ <span className="not-italic">無</span>
+            </h1>
+            <p className="font-serif text-2xl text-bone/80 italic sm:text-3xl">
+              ‘neither up or down’
+            </p>
             <p className="mt-10 text-sm tracking-widest text-bone/70 uppercase">Scroll, slowly ↓</p>
           </div>
 
@@ -153,10 +158,16 @@ export function Landing({ onEnter }: { onEnter: () => void }) {
             className="absolute inset-0 flex flex-col items-center justify-center gap-6 text-center text-night"
           >
             <p className="text-xs tracking-[0.4em] text-night/60 uppercase">Now walk through it</p>
-            <h2 className="font-serif text-6xl tracking-tight italic sm:text-8xl">Beyond Euclid</h2>
+            <h2 className="font-serif text-6xl tracking-tight italic sm:text-8xl">
+              WÚ <span className="not-italic">無</span>
+            </h2>
+            <p className="font-serif text-2xl text-night/80 italic sm:text-3xl">
+              ‘neither up or down’
+            </p>
             <p className="max-w-md px-6 text-night/70">
-              A sandbox of impossible rooms: doors that change your size, corridors that loop,
-              floors that become walls.
+              Wú (無): negative, void, nothingness, non-being; it can imply ‘neither yes nor no’. A
+              sandbox of impossible rooms: doors that change your size, corridors that loop, floors
+              that become walls.
             </p>
             <button
               type="button"
