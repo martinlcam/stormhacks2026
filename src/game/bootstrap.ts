@@ -115,8 +115,8 @@ export function bootstrap(
       // R: back to the start. M: sound off or on.
       if (event.code === 'KeyR') engine.player.respawn()
       if (event.code === 'KeyM') sound.toggle()
-      // End: a secret. Everything is found at once, which brings on the ending.
-      if (event.code === 'End' && !lightingScene) {
+      // P: a secret. Everything is found at once, which brings on the ending.
+      if (event.code === 'KeyP' && !lightingScene) {
         for (const id of Object.keys(discoveries) as DiscoveryId[]) game.discover(id)
       }
       // The first time the player walks and jumps, the controls shown to new players tick them off.
