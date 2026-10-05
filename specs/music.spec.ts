@@ -3,7 +3,7 @@ import { MUSIC_TRACKS, trackBy, useMusic } from '../src/game/music'
 
 describe('Feature: the ambient playlist continues for ever', () => {
   it('lists every supplied track once', () => {
-    expect(MUSIC_TRACKS).toHaveLength(7)
+    expect(MUSIC_TRACKS).toHaveLength(9)
     expect(new Set(MUSIC_TRACKS.map((track) => track.src)).size).toBe(MUSIC_TRACKS.length)
     expect(MUSIC_TRACKS.every((track) => track.artist === 'Grace Chiang')).toBe(true)
   })

@@ -8,12 +8,14 @@ export interface MusicTrack {
 
 const ARTIST = 'Grace Chiang'
 const files = [
+  'Grace Chiang - adore Him.mp3',
   'Grace Chiang - biking to the beach.mp3',
   'Grace Chiang - dinner on the moon.mp3',
   'Grace Chiang - flipping through channels.mp3',
   'Grace Chiang - jamming in the car.mp3',
   'Grace Chiang - midnight.mp3',
   'Grace Chiang - staying in on Sunday (it is well).mp3',
+  'Grace Chiang - sunbathing in the dark.mp3',
   'Grace Chiang - waiting for that damn 99.mp3',
 ] as const
 
@@ -42,9 +44,9 @@ interface MusicState {
   volume: number
 }
 
-/* Slightly louder than the first version's 0.045 gain, while remaining well below the effects. */
+/* Slightly louder than the first version, while remaining well below the effects. */
 const DEFAULT_VOLUME = 0.6
-const MAX_MUSIC_LEVEL = 0.1
+const MAX_MUSIC_LEVEL = 0.12
 
 export const useMusic = create<MusicState>(() => ({
   current: 0,

@@ -33,24 +33,24 @@ body,
   }
 }
 
-/* A fine pencil line and paper-coloured thumb for the music scrap's volume. */
-.music-volume {
+/* A fine pencil line and paper-coloured thumb for the audio scraps. */
+.audio-volume {
   height: 1rem;
   cursor: pointer;
   appearance: none;
   background: transparent;
 }
 
-.music-volume::-webkit-slider-runnable-track {
+.audio-volume::-webkit-slider-runnable-track {
   height: 1px;
   background: linear-gradient(
     to right,
-    #584747 0 var(--music-volume),
-    rgb(88 71 71 / 25%) var(--music-volume) 100%
+    #584747 0 var(--audio-volume),
+    rgb(88 71 71 / 25%) var(--audio-volume) 100%
   );
 }
 
-.music-volume::-webkit-slider-thumb {
+.audio-volume::-webkit-slider-thumb {
   width: 0.65rem;
   height: 0.65rem;
   margin-top: -0.3rem;
@@ -60,17 +60,17 @@ body,
   background: #f7f4ee;
 }
 
-.music-volume::-moz-range-track {
+.audio-volume::-moz-range-track {
   height: 1px;
   background: rgb(88 71 71 / 25%);
 }
 
-.music-volume::-moz-range-progress {
+.audio-volume::-moz-range-progress {
   height: 1px;
   background: #584747;
 }
 
-.music-volume::-moz-range-thumb {
+.audio-volume::-moz-range-thumb {
   width: 0.65rem;
   height: 0.65rem;
   border: 1px solid #584747;
@@ -78,7 +78,7 @@ body,
   background: #f7f4ee;
 }
 
-.music-volume:focus-visible {
+.audio-volume:focus-visible {
   outline: 1px solid rgb(88 71 71 / 60%);
   outline-offset: 2px;
 }

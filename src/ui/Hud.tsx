@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { discoveries } from '../game/discoveries'
 import { useGame } from '../game/store'
+import { AmbienceMixer } from './AmbienceMixer'
 import { Ending, useEnding } from './Ending'
 import { MusicPlayer } from './MusicPlayer'
 import { PaperButton } from './PaperButton'
@@ -30,7 +31,7 @@ export function Hud({
   const end = useGame((s) => s.end)
   const ending = useEnding(showDiscoveries)
   const ended = ending.phase === 'shown'
-  const musicVisible =
+  const audioVisible =
     showMusicPlayer && (ending.phase === 'waiting' || ending.phase === 'dismissed')
 
   return (
@@ -53,7 +54,12 @@ export function Hud({
           }}
         />
       )}
-      {musicVisible && <MusicPlayer />}
+      {audioVisible && (
+        <div className="pointer-events-none absolute right-2 bottom-2 z-20 flex max-w-[calc(100%-1rem)] flex-col items-end gap-2 sm:flex-row sm:items-end">
+          <AmbienceMixer />
+          <MusicPlayer />
+        </div>
+      )}
     </div>
   )
 }

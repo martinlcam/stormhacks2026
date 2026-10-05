@@ -1,4 +1,5 @@
 import type { PlayerController } from '../engine/PlayerController'
+import { MAX_DRONE_LEVEL, MAX_RAIN_LEVEL, useAmbience } from './ambience'
 import { Music } from './music'
 
 /* Metres walked between footsteps, per unit of the player's scale. */
@@ -51,6 +52,8 @@ export class Sound {
   private readonly music = new Music()
   private context?: AudioContext
   private master?: GainNode
+  private hum?: GainNode
+  private wet?: GainNode
   private noise?: AudioBuffer
   private drone: OscillatorNode[] = []
   private muted = false
@@ -58,6 +61,16 @@ export class Sound {
   private doors = 0
   private wasOnGround = true
   private fallSpeed = 0
+  private readonly stopAmbience = useAmbience.subscribe((now, before) => {
+    const context = this.context
+    if (!context) return
+    if (this.hum && now.drone !== before.drone) {
+      this.hum.gain.setTargetAtTime(now.drone * MAX_DRONE_LEVEL, context.currentTime, 0.03)
+    }
+    if (this.wet && now.rain !== before.rain) {
+      this.wet.gain.setTargetAtTime(now.rain * MAX_RAIN_LEVEL, context.currentTime, 0.03)
+    }
+  })
 
   start() {
     if (this.context) {
@@ -78,17 +91,17 @@ export class Sound {
 
     // A quiet chord that is always there: a note, the fifth above it, and
     // the note again an octave up, a little out of tune so that it moves.
-    const hum = context.createGain()
-    hum.gain.value = 0.09
+    this.hum = context.createGain()
+    this.hum.gain.value = useAmbience.getState().drone * MAX_DRONE_LEVEL
     const soften = context.createBiquadFilter()
     soften.type = 'lowpass'
     soften.frequency.value = 420
-    hum.connect(soften).connect(this.master)
+    this.hum.connect(soften).connect(this.master)
     this.drone = [1, 1.5, 2.01].map((ratio) => {
       const voice = context.createOscillator()
       voice.type = ratio === 1 ? 'triangle' : 'sine'
       voice.frequency.value = ROOTS[0] * ratio
-      voice.connect(hum)
+      voice.connect(this.hum!)
       voice.start()
       return voice
     })
@@ -113,9 +126,9 @@ export class Sound {
         const falling = context.createBufferSource()
         falling.buffer = rain
         falling.loop = true
-        const wet = context.createGain()
-        wet.gain.value = 0.2
-        falling.connect(wet).connect(master)
+        this.wet = context.createGain()
+        this.wet.gain.value = useAmbience.getState().rain * MAX_RAIN_LEVEL
+        falling.connect(this.wet).connect(master)
         falling.start()
       })
       // No rain is better than no game.
@@ -131,9 +144,12 @@ export class Sound {
   }
 
   dispose() {
+    this.stopAmbience()
     this.music.dispose()
     void this.context?.close()
     this.context = undefined
+    this.hum = undefined
+    this.wet = undefined
   }
 
   /* Listen to the player: footsteps, landings and doors. */

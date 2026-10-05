@@ -1,4 +1,5 @@
 import { MUSIC_TRACKS, musicControls, useMusic } from '../game/music'
+import { AudioSlider } from './AudioSlider'
 import { Wash } from './Wash'
 
 /* A small scrap of the same watercolour paper as the rest of the HUD. */
@@ -12,7 +13,7 @@ export function MusicPlayer() {
   return (
     <aside
       aria-label="music player"
-      className="pointer-events-auto absolute right-2 bottom-2 z-20 w-[min(19rem,calc(100%-1rem))] px-7 pt-5 pb-5 font-light text-caption transition-opacity duration-700 starting:opacity-0"
+      className="pointer-events-auto relative w-[min(21rem,calc(100vw-1rem))] px-7 pt-5 pb-5 font-light text-caption transition-opacity duration-700 starting:opacity-0"
     >
       <Wash rough={11} seed={53} radius={20} blooms={['blue']} />
       <div className="relative">
@@ -23,8 +24,7 @@ export function MusicPlayer() {
             </p>
             <p
               aria-live="polite"
-              className="mt-0.5 mb-0 truncate text-sm tracking-[-0.03em] text-ink"
-              title={track.title}
+              className="mt-0.5 mb-0 break-words text-sm leading-snug tracking-[-0.03em] text-ink"
             >
               {track.title}
             </p>
@@ -52,20 +52,9 @@ export function MusicPlayer() {
           music by grace chiang
         </a>
 
-        <label className="mt-2 flex items-center gap-2 text-[0.65rem] tracking-[-0.01em] text-caption/70">
-          <span>volume</span>
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.01"
-            value={volume}
-            aria-label="music volume"
-            onChange={(event) => musicControls.setVolume(Number(event.target.value))}
-            className="music-volume min-w-0 flex-1"
-            style={{ '--music-volume': `${volume * 100}%` } as React.CSSProperties}
-          />
-        </label>
+        <div className="mt-2">
+          <AudioSlider label="music" value={volume} onChange={musicControls.setVolume} />
+        </div>
       </div>
     </aside>
   )
