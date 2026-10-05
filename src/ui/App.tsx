@@ -64,7 +64,14 @@ export function App() {
 
   return (
     <>
-      {built && <Game fromLanding={fromLanding} active={stage !== 'landing'} register={register} />}
+      {built && (
+        <Game
+          fromLanding={fromLanding}
+          active={stage !== 'landing'}
+          showMusicPlayer={stage === 'game'}
+          register={register}
+        />
+      )}
       {stage !== 'game' && <Landing onEnter={enter} onGone={arrive} />}
       <FlagsPanel />
     </>
@@ -97,10 +104,13 @@ function whenIdle(then: () => void, after: number): () => void {
 function Game({
   fromLanding,
   active,
+  showMusicPlayer,
   register,
 }: {
   fromLanding: boolean
   active: boolean
+  /* Hidden behind the landing and its transition; shown only once the game has arrived. */
+  showMusicPlayer: boolean
   /* Tells the app how to capture the mouse, or that it no longer can. */
   register: (handle: GameHandle | null) => void
 }) {
@@ -145,6 +155,7 @@ function Game({
         onPlay={capture}
         showStartScreen={!lightingScene && !waiting}
         showDiscoveries={!lightingScene}
+        showMusicPlayer={showMusicPlayer}
       />
       {!lightingScene && <Onboarding />}
       {waiting && active && !playing && (

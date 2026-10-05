@@ -38,12 +38,21 @@ interface MusicState {
   /* What the listener asked for. It can be true before the first click lets audio begin. */
   playing: boolean
   ready: boolean
+  /* Listener volume from silent at 0 to the still-background maximum at 1. */
+  volume: number
 }
 
-export const useMusic = create<MusicState>(() => ({ current: 0, playing: true, ready: false }))
+/* Slightly louder than the first version's 0.045 gain, while remaining well below the effects. */
+const DEFAULT_VOLUME = 0.6
+const MAX_MUSIC_LEVEL = 0.1
 
-/* Music is deliberately far below the effects: about -27 dB before the shared master. */
-const MUSIC_LEVEL = 0.045
+export const useMusic = create<MusicState>(() => ({
+  current: 0,
+  playing: true,
+  ready: false,
+  volume: DEFAULT_VOLUME,
+}))
+
 /* The end of one piece and the start of the next share this many seconds. */
 const TRACK_BLEND = 6
 /* A requested skip is quicker, but is still a blend rather than a cut. */
@@ -82,7 +91,13 @@ export const musicControls = {
   previous: () => player?.previous(),
   toggle: () => player?.toggle(),
   next: () => player?.next(),
+  setVolume: (volume: number) => {
+    if (player) player.setVolume(volume)
+    else useMusic.setState({ volume: clampVolume(volume) })
+  },
 }
+
+const clampVolume = (volume: number) => Math.max(0, Math.min(1, volume))
 
 /*
   Two audio elements act as decks. The next recording is loaded while the
@@ -96,6 +111,7 @@ export class Music {
   private active = 0
   private current = useMusic.getState().current
   private wantsPlayback = useMusic.getState().playing
+  private volume = useMusic.getState().volume
   private transition?: Transition
   private transitionPending = false
   private playRequest = 0
@@ -111,7 +127,7 @@ export class Music {
     if (this.context) return
     this.context = context
     this.bus = context.createGain()
-    this.bus.gain.value = MUSIC_LEVEL
+    this.bus.gain.value = this.volume * MAX_MUSIC_LEVEL
     this.bus.connect(destination)
     this.decks = [this.makeDeck(0), this.makeDeck(1)]
     this.load(0, this.current)
@@ -135,6 +151,14 @@ export class Music {
     if (!this.context) return
     if (this.wantsPlayback) this.playActive()
     else this.pause()
+  }
+
+  setVolume(volume: number) {
+    this.volume = clampVolume(volume)
+    if (this.context && this.bus) {
+      this.bus.gain.setTargetAtTime(this.volume * MAX_MUSIC_LEVEL, this.context.currentTime, 0.03)
+    }
+    this.publish(Boolean(this.context))
   }
 
   dispose() {
@@ -315,6 +339,11 @@ export class Music {
   }
 
   private publish(ready: boolean) {
-    useMusic.setState({ current: this.current, playing: this.wantsPlayback, ready })
+    useMusic.setState({
+      current: this.current,
+      playing: this.wantsPlayback,
+      ready,
+      volume: this.volume,
+    })
   }
 }

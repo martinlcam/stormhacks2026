@@ -6,6 +6,7 @@ export function MusicPlayer() {
   const current = useMusic((state) => state.current)
   const playing = useMusic((state) => state.playing)
   const ready = useMusic((state) => state.ready)
+  const volume = useMusic((state) => state.volume)
   const track = MUSIC_TRACKS[current]
 
   return (
@@ -50,6 +51,21 @@ export function MusicPlayer() {
         >
           music by grace chiang
         </a>
+
+        <label className="mt-2 flex items-center gap-2 text-[0.65rem] tracking-[-0.01em] text-caption/70">
+          <span>volume</span>
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.01"
+            value={volume}
+            aria-label="music volume"
+            onChange={(event) => musicControls.setVolume(Number(event.target.value))}
+            className="music-volume min-w-0 flex-1"
+            style={{ '--music-volume': `${volume * 100}%` } as React.CSSProperties}
+          />
+        </label>
       </div>
     </aside>
   )

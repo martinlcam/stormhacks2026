@@ -19,15 +19,19 @@ export function Hud({
   onPlay,
   showStartScreen = true,
   showDiscoveries = true,
+  showMusicPlayer = true,
 }: {
   onPlay: () => void
   showStartScreen?: boolean
   showDiscoveries?: boolean
+  showMusicPlayer?: boolean
 }) {
   const playing = useGame((s) => s.playing)
   const end = useGame((s) => s.end)
   const ending = useEnding(showDiscoveries)
   const ended = ending.phase === 'shown'
+  const musicVisible =
+    showMusicPlayer && (ending.phase === 'waiting' || ending.phase === 'dismissed')
 
   return (
     <div className="pointer-events-none absolute inset-0 font-sans select-none">
@@ -49,7 +53,7 @@ export function Hud({
           }}
         />
       )}
-      <MusicPlayer />
+      {musicVisible && <MusicPlayer />}
     </div>
   )
 }

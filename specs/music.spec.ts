@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test'
-import { MUSIC_TRACKS, trackBy } from '../src/game/music'
+import { MUSIC_TRACKS, trackBy, useMusic } from '../src/game/music'
 
 describe('Feature: the ambient playlist continues for ever', () => {
   it('lists every supplied track once', () => {
@@ -14,5 +14,9 @@ describe('Feature: the ambient playlist continues for ever', () => {
 
   it('goes back from the first track to the last', () => {
     expect(trackBy(0, -1)).toBe(MUSIC_TRACKS.length - 1)
+  })
+
+  it('starts a little above half volume, with headroom for the effects', () => {
+    expect(useMusic.getState().volume).toBe(0.6)
   })
 })
