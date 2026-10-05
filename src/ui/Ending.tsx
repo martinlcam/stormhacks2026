@@ -148,7 +148,7 @@ export function Ending({ phase, onContinue }: { phase: EndingPhase; onContinue: 
           <Type
             key={i}
             x={RIGHT}
-            y={367}
+            y={300}
             size={128}
             spacing={-14.08}
             align="right"
