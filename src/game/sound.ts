@@ -1,4 +1,5 @@
 import type { PlayerController } from '../engine/PlayerController'
+import { Music } from './music'
 
 /* Metres walked between footsteps, per unit of the player's scale. */
 const STRIDE = 2.1
@@ -47,6 +48,7 @@ export function seamless(
   because a browser will not make sound before one.
 */
 export class Sound {
+  private readonly music = new Music()
   private context?: AudioContext
   private master?: GainNode
   private noise?: AudioBuffer
@@ -67,6 +69,7 @@ export class Sound {
     this.master = context.createGain()
     this.master.gain.value = this.muted ? 0 : 0.6
     this.master.connect(context.destination)
+    this.music.start(context, this.master)
 
     // One second of noise, used for steps, wind and throws.
     this.noise = context.createBuffer(1, context.sampleRate, context.sampleRate)
@@ -128,6 +131,7 @@ export class Sound {
   }
 
   dispose() {
+    this.music.dispose()
     void this.context?.close()
     this.context = undefined
   }

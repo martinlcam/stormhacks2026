@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { discoveries } from '../game/discoveries'
 import { useGame } from '../game/store'
 import { Ending, useEnding } from './Ending'
+import { MusicPlayer } from './MusicPlayer'
 import { PaperButton } from './PaperButton'
 import { Wash } from './Wash'
 
@@ -48,6 +49,7 @@ export function Hud({
           }}
         />
       )}
+      <MusicPlayer />
     </div>
   )
 }
